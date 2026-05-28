@@ -28,7 +28,6 @@ const WELCOME_TEXT = "👋 Hi! I'm your import assistant. Upload a CSV or XLSX f
 let currentFile = null;
 let parseResult = null;
 let mappingInProgress = false;
-let pendingAllowWrite = false;
 
 function safeJsonParse(str, fallback) {
   try {
@@ -432,14 +431,6 @@ async function sendMessage() {
 
   chatInput.value = '';
 
-  // One-time write confirmation command
-  if (text.toLowerCase() === 'allow_write=true') {
-    pendingAllowWrite = true;
-    addMessage(text, true, { persist: false });
-    addMessage('Write confirmation enabled for the next agent action.', false);
-    return;
-  }
-
   addMessage(text, true);
 
   // Handle specific commands
@@ -502,8 +493,7 @@ async function sendChatMessage() {
   try {
     const mode = chatModeSelect?.value || getChatMode();
     const messages = getConversationMessages();
-    const allow_write = pendingAllowWrite;
-    pendingAllowWrite = false;
+    const allow_write = mode === 'agent';
 
     const response = await fetch('/api/hr/agent/chat', {
       method: 'POST',

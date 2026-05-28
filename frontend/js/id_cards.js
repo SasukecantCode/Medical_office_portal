@@ -21,23 +21,54 @@ function escAttr(str) {
 }
 // -------------------------
 
+import './id_card_modal_handlers.js';
+
 export async function renderIdCardsPage(container) {
+  let fieldDefs = [];
+  try {
+    fieldDefs = await api.listFieldDefs();
+  } catch {
+    fieldDefs = [];
+  }
+
   container.innerHTML = `
     <div class="id-card-controls glass-panel" style="margin-bottom: 24px;">
       <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
-        <div style="flex: 1; min-width: 250px; position: relative;">
+        <div class="id-card-search-wrapper" style="flex:1; min-width:250px; position:relative;">
           <input type="text" id="id-card-search" placeholder="Search staff to generate ID..." class="form-input" autocomplete="off" />
-          <div id="id-card-dropdown" class="autocomplete-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 100;"></div>
+          <div id="id-card-dropdown" class="autocomplete-dropdown" style="display:none;"></div>
         </div>
-        <button id="btn-print-id" class="btn btn-primary" disabled>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-          Print ID Card
-        </button>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button id="btn-download-id" class="btn btn-sm btn-ghost" disabled title="Download ID Card">↓ Download</button>
+          <button id="btn-print-id" class="btn btn-primary" disabled title="Print ID Card">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            Print
+          </button>
+        </div>
       </div>
     </div>
 
-    <div id="id-card-preview-container" style="display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; align-items: flex-start; padding: 24px; background: #f0f2f5; border-radius: 12px; min-height: 400px;">
-      <div style="color: #666; align-self: center;">Search and select a staff member to preview their ID card.</div>
+    <div id="id-card-preview-shell" class="glass-card" style="min-height:420px; display:flex; align-items:center; justify-content:center; padding:20px;">
+      <div id="id-card-preview-container" style="display:flex; gap:24px; flex-wrap:wrap; justify-content:center; align-items:flex-start;">
+        <div style="color: #666; align-self: center;">Search and select a staff member to preview their ID card.</div>
+      </div>
+    </div>
+
+    <!-- Fullscreen modal for large preview -->
+    <div id="idcard-modal-backdrop" class="modal-backdrop" hidden>
+      <div class="modal idcard-modal" role="dialog" aria-modal="true" style="max-width: 1200px; width: calc(100% - 64px);">
+        <div class="modal-header">
+          <h3 class="attachment-preview-title">ID Card Preview</h3>
+          <div class="attachment-preview-controls">
+            <button id="idcard-download-btn" class="btn btn-icon btn-ghost" title="Download">↓</button>
+            <button id="idcard-print-btn" class="btn btn-icon btn-ghost" title="Print">🖨</button>
+            <button id="idcard-close-btn" class="modal-close-btn" title="Close">✕</button>
+          </div>
+        </div>
+        <div class="attachment-preview-body" id="idcard-modal-body" style="display:flex; gap:18px; padding:20px;">
+          <!-- rendered cards inserted here -->
+        </div>
+      </div>
     </div>
   `;
 
@@ -45,6 +76,12 @@ export async function renderIdCardsPage(container) {
   const dropdown = document.getElementById('id-card-dropdown');
   const previewContainer = document.getElementById('id-card-preview-container');
   const printBtn = document.getElementById('btn-print-id');
+  const downloadBtn = document.getElementById('btn-download-id');
+  const modalBackdrop = document.getElementById('idcard-modal-backdrop');
+  const modalBody = document.getElementById('idcard-modal-body');
+  const modalClose = document.getElementById('idcard-close-btn');
+  const modalPrint = document.getElementById('idcard-print-btn');
+  const modalDownload = document.getElementById('idcard-download-btn');
 
   let searchTimer;
   let currentStaff = null;
@@ -86,14 +123,22 @@ export async function renderIdCardsPage(container) {
   dropdown.addEventListener('click', async (e) => {
     const item = e.target.closest('.autocomplete-item');
     if (!item || !item.dataset.id) return;
-    
+
     dropdown.style.display = 'none';
     searchInput.value = item.querySelector('strong').textContent;
-    
+
     try {
       currentStaff = await api.getStaff(item.dataset.id);
-      renderPreview(currentStaff, previewContainer);
+      renderPreview(currentStaff, previewContainer, fieldDefs);
       printBtn.disabled = false;
+      downloadBtn.disabled = false;
+      // populate modal body when opened
+      modalBody.innerHTML = '';
+      modalBody.insertAdjacentHTML('beforeend', generateIdCardFront(currentStaff));
+      modalBody.insertAdjacentHTML('beforeend', generateIdCardBack(currentStaff, fieldDefs));
+      // expose for delegated handlers
+      window.__medical_last_idcard_staff = currentStaff;
+      window.__medical_field_defs = fieldDefs;
     } catch (err) {
       showToast('Failed to load staff details', 'error');
     }
@@ -105,9 +150,9 @@ export async function renderIdCardsPage(container) {
   });
 }
 
-function renderPreview(staff, container) {
+function renderPreview(staff, container, fieldDefs = []) {
   const frontHtml = generateIdCardFront(staff);
-  const backHtml = generateIdCardBack(staff);
+  const backHtml = generateIdCardBack(staff, fieldDefs);
 
   container.innerHTML = `
     <div class="id-card-wrapper">
@@ -122,13 +167,17 @@ function renderPreview(staff, container) {
 }
 
 function generateIdCardFront(staff) {
-  // Extract custom fields if any
-  const fatherName = staff.extra?.Father_Name || staff.extra?.['Son of Late'] || staff.extra?.['Son/Daughter/Wife of'] || '';
-  const department = staff.extra?.Department || 'Health & Family Welfare';
-  const identificationMark = staff.extra?.Identification_Mark || staff.extra?.['Identification Mark'] || staff.extra?.['Mark of Identification'] || '';
-  const validUpto = staff.extra?.Valid_Upto || staff.extra?.['Valid Upto'] || '31/12/2030';
-  
+  const staffId = staff?.id ? `#${staff.id}` : '';
   const photo = staff.photo_url ? `<img src="${staff.photo_url}" style="width:100%; height:100%; object-fit:cover;" />` : '';
+
+  const rows = [
+    ['NAME', staff.full_name, true],
+    ['GENDER', staff.gender],
+    ['DESIGNATION', staff.designation],
+    ['FACILITY NAME', staff.facility_name],
+    ['POSTING PLACE', staff.posting_place || staff.block || ''],
+    ['DISTRICT', staff.district],
+  ];
 
   return `
     <div class="idc-card">
@@ -146,7 +195,7 @@ function generateIdCardFront(staff) {
             ${photo}
           </div>
           <div class="idc-validity">
-            <strong>Valid<br/>upto :</strong> <span>${escHtml(validUpto)}</span>
+            <strong>Staff<br/>ID :</strong> <span>${escHtml(staffId)}</span>
           </div>
         </div>
         <div class="idc-details-section">
@@ -155,12 +204,17 @@ function generateIdCardFront(staff) {
             <div class="idc-office-text">OFFICE OF THE DISTRICT MEDICAL OFFICER (DMO)<br/><span class="idc-office-namsai">— NAMSAI —</span></div>
           </div>
           <table class="idc-table">
-            <tr><td class="idc-lbl">NAME</td><td class="idc-sep">:</td><td class="idc-val idc-name">${escHtml(staff.full_name)}</td></tr>
-            <tr><td class="idc-lbl">SON OF LATE</td><td class="idc-sep">:</td><td class="idc-val">${escHtml(fatherName)}</td></tr>
-            <tr><td class="idc-lbl">DEPARTMENT</td><td class="idc-sep">:</td><td class="idc-val">${escHtml(department)}</td></tr>
-            <tr><td class="idc-lbl">DESIGNATION</td><td class="idc-sep">:</td><td class="idc-val">${escHtml(staff.designation || '')}</td></tr>
-            <tr><td class="idc-lbl">POSTING PLACE</td><td class="idc-sep">:</td><td class="idc-val">${escHtml(staff.facility_name || '')}</td></tr>
-            <tr><td class="idc-lbl">IDENTIFICATION MARK</td><td class="idc-sep">:</td><td class="idc-val">${escHtml(identificationMark)}</td></tr>
+            ${rows
+              .map(
+                ([label, value, highlight]) => `
+                  <tr>
+                    <td class="idc-lbl">${escHtml(label)}</td>
+                    <td class="idc-sep">:</td>
+                    <td class="idc-val ${highlight ? 'idc-name' : ''}">${escHtml(value || '')}</td>
+                  </tr>
+                `
+              )
+              .join('')}
           </table>
         </div>
       </div>
@@ -168,20 +222,10 @@ function generateIdCardFront(staff) {
   `;
 }
 
-function generateIdCardBack(staff) {
-  const height = staff.extra?.Height || '';
-  const bloodGroup = staff.extra?.Blood_Group || staff.extra?.['Blood Group'] || '';
-  const colorOfEye = staff.extra?.Color_of_Eye || staff.extra?.['Color of eye'] || '';
-  const txId = staff.extra?.Tx_ID || staff.extra?.['Tx ID'] || staff.extra?.HRMS_ID || '';
-  const dob = staff.date_of_birth ? new Date(staff.date_of_birth).toLocaleDateString('en-GB') : '';
-  const dobWords = staff.extra?.DOB_in_words || staff.extra?.['DOB in words'] || '';
-  const dateOfIssue = staff.extra?.Date_of_Issue || staff.extra?.['Date of Issue'] || '';
-  const memoNo = staff.extra?.Memo_No || staff.extra?.['Memo No'] || '';
-  const dated = staff.extra?.Dated || '';
-  const village = staff.extra?.Village || '';
-  const po = staff.extra?.Post_Office || staff.extra?.['Post Office'] || '';
-  const ps = staff.extra?.Police_Station || staff.extra?.['Police Station'] || '';
-  const dist = staff.district || '';
+function generateIdCardBack(staff, fieldDefs = []) {
+  const dob = formatDateValue(staff.date_of_birth);
+  const dateOfJoining = formatDateValue(staff.date_of_joining);
+  const customRows = getCustomFieldRows(staff, fieldDefs);
 
   return `
     <div class="idc-card">
@@ -193,39 +237,63 @@ function generateIdCardBack(staff) {
           <!-- Top Row -->
           <div class="idc-row idc-row-top">
             <div class="idc-col">
-              <div class="idc-field"><span class="idc-f-lbl">Height:</span> <span class="idc-line">${escHtml(height)}</span></div>
-              <div class="idc-field"><span class="idc-f-lbl">Blood Group:</span> <span class="idc-line">${escHtml(bloodGroup)}</span></div>
-              <div class="idc-field"><span class="idc-f-lbl">Color of eye:</span> <span class="idc-line">${escHtml(colorOfEye)}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">Cadre:</span> <span class="idc-line">${escHtml(staff.cadre || '')}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">Employment Type:</span> <span class="idc-line">${escHtml(staff.employment_type || '')}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">Facility Type:</span> <span class="idc-line">${escHtml(staff.facility_type || '')}</span></div>
             </div>
             <div class="idc-col">
-              <div class="idc-field" style="justify-content: flex-end;"><span class="idc-f-lbl">Tx ID:</span> <span class="idc-line" style="width:120px;">${escHtml(txId)}</span></div>
+              <div class="idc-field" style="justify-content: flex-end;"><span class="idc-f-lbl">Staff ID:</span> <span class="idc-line" style="width:120px;">${escHtml(String(staff.id || ''))}</span></div>
               <div class="idc-field"><span class="idc-f-lbl">DOB:</span> <span class="idc-line">${escHtml(dob)}</span></div>
-              <div class="idc-field"><span class="idc-f-lbl">DOB in words:</span> <span class="idc-line">${escHtml(dobWords)}</span></div>
-              <div class="idc-field"><span class="idc-f-lbl">Date of Issue:</span> <span class="idc-line">${escHtml(dateOfIssue)}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">Date of Joining:</span> <span class="idc-line">${escHtml(dateOfJoining)}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">Phone:</span> <span class="idc-line">${escHtml(staff.phone || '')}</span></div>
             </div>
           </div>
           
           <!-- Middle Row -->
           <div class="idc-row idc-row-mid">
             <div class="idc-col">
-              <div class="idc-section-title">Appointment Details:</div>
-              <div class="idc-field"><span class="idc-f-lbl">Memo No:</span> <span class="idc-line">${escHtml(memoNo)}</span></div>
-              <div class="idc-field"><span class="idc-f-lbl">Dated:</span> <span class="idc-line">${escHtml(dated)}</span></div>
+              <div class="idc-section-title">SERVICE DETAILS</div>
+              <div class="idc-field"><span class="idc-f-lbl">Designation:</span> <span class="idc-line">${escHtml(staff.designation || '')}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">Facility Name:</span> <span class="idc-line">${escHtml(staff.facility_name || '')}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">Posting Place:</span> <span class="idc-line">${escHtml(staff.posting_place || '')}</span></div>
             </div>
             <div class="idc-col">
-              <div class="idc-section-title" style="text-align: center;">PERMANENT ADDRESS</div>
-              <div class="idc-line" style="width:100%; margin-top:10px;"></div>
-              <div class="idc-line" style="width:100%; margin-top:16px;"></div>
+              <div class="idc-section-title" style="text-align: center;">LOCATION</div>
+              <div class="idc-field"><span class="idc-f-lbl">Block:</span> <span class="idc-line">${escHtml(staff.block || '')}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">District:</span> <span class="idc-line">${escHtml(staff.district || '')}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">Email:</span> <span class="idc-line">${escHtml(staff.email || '')}</span></div>
             </div>
           </div>
+
+          ${
+            customRows.length
+              ? `
+          <div class="idc-custom-section">
+            <div class="idc-section-title">ADDITIONAL FIELDS</div>
+            <div class="idc-custom-grid">
+              ${customRows
+                .map(
+                  ({ label, value }) => `
+                    <div class="idc-field">
+                      <span class="idc-f-lbl">${escHtml(label)}:</span>
+                      <span class="idc-line">${escHtml(value)}</span>
+                    </div>
+                  `
+                )
+                .join('')}
+            </div>
+          </div>
+          `
+              : ''
+          }
 
           <!-- Bottom Row -->
           <div class="idc-row idc-row-bot">
             <div class="idc-col">
-              <div class="idc-field"><span class="idc-f-lbl">Village:</span> <span class="idc-line">${escHtml(village)}</span></div>
-              <div class="idc-field"><span class="idc-f-lbl">Post Office:</span> <span class="idc-line">${escHtml(po)}</span></div>
-              <div class="idc-field"><span class="idc-f-lbl">Police Station:</span> <span class="idc-line">${escHtml(ps)}</span></div>
-              <div class="idc-field"><span class="idc-f-lbl">District:</span> <span class="idc-line">${escHtml(dist)}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">Facility Name:</span> <span class="idc-line">${escHtml(staff.facility_name || '')}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">Facility Type:</span> <span class="idc-line">${escHtml(staff.facility_type || '')}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">Email:</span> <span class="idc-line">${escHtml(staff.email || '')}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">District:</span> <span class="idc-line">${escHtml(staff.district || '')}</span></div>
               <div class="idc-field"><span class="idc-f-lbl">State: ARUNACHAL PRADESH</span></div>
             </div>
             <div class="idc-col" style="justify-content: flex-end; align-items: center; padding-bottom: 5px;">
@@ -236,6 +304,50 @@ function generateIdCardBack(staff) {
       </div>
     </div>
   `;
+}
+
+function getExtraData(staff) {
+  if (!staff || typeof staff.extra !== 'object' || Array.isArray(staff.extra)) {
+    return {};
+  }
+  return staff.extra || {};
+}
+
+function getExtraValue(extra, keys) {
+  for (const key of keys) {
+    if (key in extra) {
+      const value = extra[key];
+      if (value !== null && value !== undefined && String(value).trim() !== '') {
+        return value;
+      }
+    }
+  }
+  return '';
+}
+
+function getCustomFieldRows(staff, fieldDefs) {
+  const extra = getExtraData(staff);
+  if (!Array.isArray(fieldDefs) || fieldDefs.length === 0) return [];
+
+  return fieldDefs
+    .filter((fieldDef) => fieldDef && fieldDef.name)
+    .map((fieldDef) => ({
+      label: fieldDef.label || fieldDef.name,
+      value: getExtraValue(extra, [fieldDef.name]),
+    }))
+    .filter((row) => String(row.value ?? '').trim() !== '')
+    .slice(0, 6);
+}
+
+function formatDateValue(value) {
+  if (!value) return '';
+  try {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleDateString('en-GB');
+  } catch {
+    return String(value);
+  }
 }
 
 function printIdCard() {

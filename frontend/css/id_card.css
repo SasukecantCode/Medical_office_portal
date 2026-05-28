@@ -79,6 +79,8 @@
   display: flex;
   flex-direction: column;
   font-weight: bold;
+  align-items: flex-start;
+  line-height: 1.05;
 }
 
 .idc-details-section {
@@ -221,12 +223,32 @@
   font-weight: normal;
   text-transform: uppercase;
   padding-bottom: 1px;
+  word-break: break-word;
 }
 
 .idc-section-title {
   font-size: 8px;
   font-weight: bold;
   text-transform: uppercase;
+}
+
+.idc-custom-section {
+  border-top: 1px solid #002b80;
+  padding: 2px 4px 0;
+}
+
+.idc-custom-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px 6px;
+}
+
+.idc-custom-grid .idc-field {
+  font-size: 7px;
+}
+
+.idc-custom-grid .idc-line {
+  min-height: 7px;
 }
 
 /* UI Wrapper for the preview container */
