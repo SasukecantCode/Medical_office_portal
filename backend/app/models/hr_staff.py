@@ -36,6 +36,12 @@ class HRStaff(Base):
     # For future fields without immediate migrations
     extra: Mapped[dict] = mapped_column(JSON, nullable=True)
 
+    # Profile photo (single JPEG) stored on disk (MVP)
+    profile_photo_original_filename: Mapped[str] = mapped_column(String(512), nullable=True)
+    profile_photo_stored_filename: Mapped[str] = mapped_column(String(512), nullable=True)
+    profile_photo_content_type: Mapped[str] = mapped_column(String(255), nullable=True)
+    profile_photo_uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

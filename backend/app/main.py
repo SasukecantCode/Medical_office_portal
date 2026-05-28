@@ -9,6 +9,7 @@ from app.api.router import api_router
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import engine
+from sqlalchemy import text
 
 
 def _parse_cors(origins: str) -> list[str]:
@@ -92,6 +93,14 @@ def hr_demo_home() -> str:
             <div class=\"row\" style=\"margin-top:10px\">
                 <div class=\"field\" style=\"min-width: 460px; flex: 1\"><label>Remarks</label><textarea name=\"remarks\"></textarea></div>
                 <div class=\"field\" style=\"min-width: 460px; flex: 1\"><label>Extra (JSON)</label><textarea name=\"extra\" placeholder='{"key":"value"}'></textarea></div>
+            </div>
+
+            <div class=\"row\" style=\"margin-top:10px\">
+                <div class=\"field\" style=\"min-width: 460px; flex: 1\">
+                    <label>Profile Photo (JPEG) *</label>
+                    <input id=\"profilePhoto\" type=\"file\" accept=\"image/jpeg\" required />
+                    <div class=\"muted\">Required. Uploads after saving the entry.</div>
+                </div>
             </div>
 
             <div class=\"row\" style=\"margin-top:10px\">
@@ -198,6 +207,7 @@ def hr_demo_home() -> str:
                 e.preventDefault();
                 setError('');
                 try {
+                    const photoInput = document.getElementById('profilePhoto');
                     const attachmentsInput = document.getElementById('attachments');
                     const payload = formToPayload(e.target);
                     setStatus('Saving...');
@@ -212,6 +222,21 @@ def hr_demo_home() -> str:
                         return;
                     }
                     const created = await r.json();
+
+                    const photoFile = photoInput?.files?.[0];
+                    if (!photoFile) {
+                        throw new Error('Profile photo (JPEG) is required');
+                    }
+                    setStatus('Saved. Uploading profile photo...');
+                    const pfd = new FormData();
+                    pfd.append('file', photoFile);
+                    const pr = await fetch(`/api/hr/staff/${created.id}/photo`, {
+                        method: 'POST',
+                        body: pfd,
+                    });
+                    if (!pr.ok) {
+                        throw new Error('Profile photo upload failed: ' + (await pr.text()));
+                    }
 
                     const files = attachmentsInput?.files ? Array.from(attachmentsInput.files) : [];
                     if (files.length) {
@@ -267,6 +292,21 @@ def on_startup() -> None:
 
     # MVP: auto-create tables. For production, switch to migrations.
     Base.metadata.create_all(bind=engine)
+
+    # MVP: lightweight SQLite column adds for incremental schema changes
+    if engine.url.get_backend_name() == "sqlite":
+        with engine.begin() as conn:
+            cols = conn.execute(text("PRAGMA table_info(hr_staff)")).mappings().all()
+            existing = {c["name"] for c in cols}
+
+            def add_col(name: str, ddl: str) -> None:
+                if name not in existing:
+                    conn.execute(text(f"ALTER TABLE hr_staff ADD COLUMN {ddl}"))
+
+            add_col("profile_photo_original_filename", "profile_photo_original_filename VARCHAR(512)")
+            add_col("profile_photo_stored_filename", "profile_photo_stored_filename VARCHAR(512)")
+            add_col("profile_photo_content_type", "profile_photo_content_type VARCHAR(255)")
+            add_col("profile_photo_uploaded_at", "profile_photo_uploaded_at DATETIME")
 
 
 app.include_router(api_router, prefix="/api")

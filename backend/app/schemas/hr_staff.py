@@ -66,3 +66,6 @@ class HRStaffRead(HRStaffBase):
     id: int
     created_at: datetime
     updated_at: datetime
+
+    # Computed by API routes (not stored in DB)
+    photo_url: str | None = None

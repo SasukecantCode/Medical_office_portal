@@ -14,8 +14,33 @@ from app.models.hr_staff_attachment import HRStaffAttachment
 from app.schemas.hr_staff import HRStaffCreate, HRStaffUpdate
 
 
+def _normalize_text_field(value: str) -> str:
+    """Title-case and strip whitespace for consistent storage."""
+    return " ".join(value.strip().split()).title()
+
+# Fields that should be auto-normalized to Title Case on create/update
+_TITLE_CASE_FIELDS = [
+    "full_name",
+    "designation",
+    "cadre",
+    "employment_type",
+    "facility_name",
+    "facility_type",
+    "district",
+    "block",
+    "posting_place",
+]
+
+def _apply_case_normalization(data: dict) -> dict:
+    for field in _TITLE_CASE_FIELDS:
+        if field in data and data[field] and isinstance(data[field], str):
+            data[field] = _normalize_text_field(data[field])
+    return data
+
 def create_staff(db: Session, payload: HRStaffCreate) -> HRStaff:
-    staff = HRStaff(**payload.model_dump())
+    data = payload.model_dump()
+    _apply_case_normalization(data)
+    staff = HRStaff(**data)
     db.add(staff)
     db.commit()
     db.refresh(staff)
@@ -50,7 +75,7 @@ def _filters(
         )
 
     if district:
-        filters.append(HRStaff.district == district)
+        filters.append(func.lower(func.trim(HRStaff.district)) == district.strip().lower())
     if designation:
         filters.append(HRStaff.designation == designation)
     if facility_name:
@@ -88,6 +113,7 @@ def update_staff(db: Session, staff_id: int, payload: HRStaffUpdate) -> HRStaff 
         return None
 
     data = payload.model_dump(exclude_unset=True)
+    _apply_case_normalization(data)
     for key, value in data.items():
         setattr(staff, key, value)
 
@@ -95,6 +121,35 @@ def update_staff(db: Session, staff_id: int, payload: HRStaffUpdate) -> HRStaff 
     db.commit()
     db.refresh(staff)
     return staff
+
+
+_SUGGESTION_FIELDS = {
+    "designation": HRStaff.designation,
+    "cadre": HRStaff.cadre,
+    "employment_type": HRStaff.employment_type,
+    "facility_name": HRStaff.facility_name,
+    "facility_type": HRStaff.facility_type,
+    "district": HRStaff.district,
+    "block": HRStaff.block,
+    "posting_place": HRStaff.posting_place,
+}
+
+def distinct_values(db: Session, field: str, q: Optional[str] = None, limit: int = 30) -> list[str]:
+    """Return distinct non-null values for a given field, optionally filtered by prefix/substring."""
+    col = _SUGGESTION_FIELDS.get(field)
+    if col is None:
+        return []
+    stmt = (
+        select(col)
+        .where(HRStaff.deleted_at.is_(None), col.isnot(None), col != "")
+        .group_by(col)
+        .order_by(func.count().desc())
+        .limit(limit)
+    )
+    if q:
+        stmt = stmt.where(col.ilike(f"%{q.strip()}%"))
+    rows = db.execute(stmt).scalars().all()
+    return [str(r) for r in rows if r]
 
 
 def delete_staff(db: Session, staff_id: int) -> bool:
@@ -166,10 +221,30 @@ def dashboard_summary(db: Session) -> dict:
         rows = db.execute(stmt).all()
         return [{"key": r.key or "(blank)", "count": r.count} for r in rows]
 
+    def grouped_case_insensitive(field):
+        key_lower = func.lower(func.trim(field))
+        stmt = (
+            select(key_lower.label("key_lower"), func.count().label("count"))
+            .select_from(HRStaff)
+            .where(base_where)
+            .group_by(key_lower)
+            .order_by(func.count().desc())
+        )
+        rows = db.execute(stmt).all()
+        out = []
+        for r in rows:
+            raw = r.key_lower
+            if not raw:
+                label = "(blank)"
+            else:
+                label = raw.title()
+            out.append({"key": label, "count": r.count})
+        return out
+
     return {
         "totals": {"staff": total_staff},
         "by_designation": grouped(HRStaff.designation),
-        "by_district": grouped(HRStaff.district),
+        "by_district": grouped_case_insensitive(HRStaff.district),
         "by_employment_type": grouped(HRStaff.employment_type),
     }
 

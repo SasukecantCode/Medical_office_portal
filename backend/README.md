@@ -27,4 +27,9 @@ Default DB is SQLite at `backend/portal.db` (configurable via `DATABASE_URL`).
 - `GET /api/hr/staff/{id}`
 - `PATCH /api/hr/staff/{id}`
 - `DELETE /api/hr/staff/{id}`
-- `GET /api/hr/staff/export?format=csv`
+- `GET /api/hr/staff/export?format=xlsx|csv` (default: `xlsx`)
+- `POST /api/hr/staff/{id}/photo` (upload/replace profile photo JPEG)
+- `GET /api/hr/staff/{id}/photo` (download/view profile photo JPEG)
+- `POST /api/hr/staff/{id}/attachments` (upload document)
+- `GET /api/hr/staff/{id}/attachments` (list documents)
+- `GET /api/hr/staff/{id}/attachments/{attachment_id}` (download document)
