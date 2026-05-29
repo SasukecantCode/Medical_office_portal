@@ -116,6 +116,54 @@ export const api = {
   getAttachmentUrl: (staffId, attachmentId) =>
     `${API_BASE}/hr/staff/${staffId}/attachments/${attachmentId}`,
 
+  // ── Document Vault (GCS-backed) ──
+  listDocuments: (employeeId) =>
+    request(`/documents/${employeeId}`),
+
+  uploadDocument: async (employeeId, category, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const qs = new URLSearchParams({ employee_id: employeeId, category });
+    const res = await fetch(`${API_BASE}/documents/upload?${qs.toString()}`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!res.ok) {
+      let errMsg;
+      try { const d = await res.json(); errMsg = d.detail || JSON.stringify(d); } catch { errMsg = await res.text(); }
+      throw new Error(errMsg || `Upload failed: HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
+  downloadDocumentUrl: (employeeId, filePath) => {
+    const qs = new URLSearchParams({ employee_id: employeeId, file_path: filePath });
+    return `${API_BASE}/documents/download?${qs.toString()}`;
+  },
+
+  downloadAllDocumentsUrl: (employeeId) =>
+    `${API_BASE}/documents/download-all/${employeeId}`,
+
+  deleteDocument: (employeeId, filePath) =>
+    request('/documents/delete', {
+      method: 'DELETE',
+      body: JSON.stringify({ employee_id: employeeId, file_path: filePath }),
+    }),
+
+  renameDocument: (employeeId, oldPath, newPath) =>
+    request('/documents/rename', {
+      method: 'PUT',
+      body: JSON.stringify({ employee_id: employeeId, old_path: oldPath, new_path: newPath }),
+    }),
+
+  createDocumentFolder: (employeeId) =>
+    request('/documents/create-folder', {
+      method: 'POST',
+      body: JSON.stringify({ employee_id: employeeId }),
+    }),
+
   // HR Field Definitions (custom fields)
   listFieldDefs: () => request('/hr/agent/fields'),
 

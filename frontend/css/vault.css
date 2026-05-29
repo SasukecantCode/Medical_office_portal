@@ -1,0 +1,466 @@
+/* ═══════════════════════════════════════════════════════
+   Document Vault — OneDrive-style file list (glass theme)
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Breadcrumb ── */
+.vault-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: var(--space-md) var(--space-lg);
+  font-size: var(--text-sm);
+  color: rgba(255, 255, 255, 0.4);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.vault-breadcrumb-link {
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: color var(--duration-fast);
+}
+
+.vault-breadcrumb-link:hover {
+  color: var(--clr-accent-light);
+}
+
+.vault-breadcrumb-sep {
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 10px;
+}
+
+.vault-breadcrumb-current {
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
+}
+
+/* ── Vault header ── */
+.vault-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-lg);
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.vault-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  min-width: 0;
+}
+
+.vault-header-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.vault-header-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vault-header-info h3 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: var(--text-lg);
+  color: white;
+  margin: 0;
+}
+
+.vault-header-info p {
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.45);
+  margin: 2px 0 0;
+}
+
+.vault-header-actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+
+/* ── Upload card ── */
+.vault-upload-card {
+  margin: 0 var(--space-lg) var(--space-lg);
+  background: rgba(255, 255, 255, 0.03);
+  border: 2px dashed rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl) var(--space-lg);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--duration-fast), background var(--duration-fast),
+              box-shadow var(--duration-fast);
+}
+
+.vault-upload-card:hover {
+  border-color: rgba(198, 151, 63, 0.35);
+  background: rgba(198, 151, 63, 0.04);
+  box-shadow: 0 0 20px rgba(198, 151, 63, 0.08);
+}
+
+.vault-upload-card.dragover {
+  border-color: var(--clr-accent);
+  background: rgba(198, 151, 63, 0.08);
+  box-shadow: var(--glow-accent-soft);
+}
+
+.vault-upload-card svg {
+  color: rgba(255, 255, 255, 0.25);
+  margin-bottom: var(--space-sm);
+}
+
+.vault-upload-card p {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.vault-upload-card .upload-hint {
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.25);
+  margin-top: 6px;
+}
+
+.vault-upload-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin: 0 var(--space-lg) var(--space-sm);
+}
+
+.vault-upload-row label {
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+}
+
+.vault-category-select {
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: white;
+  cursor: pointer;
+}
+
+.vault-category-select option {
+  background: #1a2332;
+  color: white;
+}
+
+/* ── Toolbar (sort/filter) ── */
+.vault-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) var(--space-lg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  gap: var(--space-md);
+}
+
+.vault-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.vault-doc-count {
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.vault-sort-btn {
+  padding: 5px 12px;
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.vault-sort-btn:hover,
+.vault-sort-btn.active {
+  color: var(--clr-accent-light);
+  border-color: rgba(198, 151, 63, 0.25);
+  background: rgba(198, 151, 63, 0.08);
+}
+
+/* ── File list table ── */
+.vault-file-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.vault-file-table th {
+  padding: 10px var(--space-lg);
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.3);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--duration-fast);
+}
+
+.vault-file-table th:hover {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.vault-file-table th.sorted {
+  color: var(--clr-accent-light);
+}
+
+.vault-file-table td {
+  padding: 10px var(--space-lg);
+  font-size: var(--text-sm);
+  color: rgba(255, 255, 255, 0.75);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  white-space: nowrap;
+}
+
+.vault-file-table tbody tr {
+  transition: background var(--duration-fast);
+}
+
+.vault-file-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.vault-file-table tbody tr:hover td:first-child::before {
+  width: 3px;
+}
+
+.vault-file-table td:first-child {
+  position: relative;
+}
+
+.vault-file-table td:first-child::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: var(--clr-accent);
+  border-radius: 0 2px 2px 0;
+  transition: width var(--duration-fast) var(--ease-spring);
+}
+
+/* File name cell */
+.vault-file-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.vault-file-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  color: #A5B4FC;
+}
+
+.vault-file-icon.pdf { background: rgba(220, 38, 38, 0.1); border-color: rgba(220, 38, 38, 0.15); color: #FCA5A5; }
+.vault-file-icon.img { background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.15); color: #6EE7B7; }
+.vault-file-icon.doc { background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.15); color: #93C5FD; }
+
+.vault-file-name {
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+}
+
+/* Category badge */
+.vault-category-badge {
+  display: inline-flex;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.vault-category-badge[data-cat="Personal"] { color: #A5B4FC; background: rgba(99, 102, 241, 0.08); border-color: rgba(99, 102, 241, 0.15); }
+.vault-category-badge[data-cat="Medical"] { color: #6EE7B7; background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.15); }
+.vault-category-badge[data-cat="Employment"] { color: var(--clr-accent-light); background: rgba(198, 151, 63, 0.08); border-color: rgba(198, 151, 63, 0.15); }
+.vault-category-badge[data-cat="Other"] { color: rgba(255, 255, 255, 0.5); }
+
+/* Row actions */
+.vault-row-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0.4;
+  transition: opacity var(--duration-fast);
+}
+
+.vault-file-table tbody tr:hover .vault-row-actions {
+  opacity: 1;
+}
+
+.vault-action-btn {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: rgba(255, 255, 255, 0.5);
+  transition: all var(--duration-fast);
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.vault-action-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+.vault-action-btn.download:hover {
+  color: var(--clr-accent-light);
+  background: rgba(198, 151, 63, 0.1);
+  border-color: rgba(198, 151, 63, 0.15);
+}
+
+.vault-action-btn.delete:hover {
+  color: #FCA5A5;
+  background: rgba(220, 38, 38, 0.1);
+  border-color: rgba(220, 38, 38, 0.15);
+}
+
+.vault-action-btn.rename:hover {
+  color: #A5B4FC;
+  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.15);
+}
+
+/* ── Category group headers ── */
+.vault-category-group {
+  padding: 10px var(--space-lg) 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vault-category-group .group-count {
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.2);
+}
+
+/* ── Empty state ── */
+.vault-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3xl) var(--space-lg);
+  text-align: center;
+}
+
+.vault-empty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-lg);
+}
+
+.vault-empty-icon svg {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.vault-empty h4 {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0 0 var(--space-sm);
+}
+
+.vault-empty p {
+  font-size: var(--text-sm);
+  color: rgba(255, 255, 255, 0.3);
+  max-width: 320px;
+}
+
+/* ── File size & date ── */
+.vault-file-size,
+.vault-file-date {
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* ── Rename inline input ── */
+.vault-rename-input {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  border-radius: var(--radius-sm);
+  color: white;
+  font-size: var(--text-sm);
+  padding: 4px 8px;
+  width: 220px;
+  outline: none;
+}
+
+.vault-rename-input:focus {
+  border-color: rgba(99, 102, 241, 0.7);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .vault-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .vault-file-table td,
+  .vault-file-table th {
+    padding: 8px var(--space-md);
+  }
+  .vault-file-name {
+    max-width: 160px;
+  }
+  .vault-upload-card {
+    margin: 0 var(--space-md) var(--space-md);
+  }
+}

@@ -22,7 +22,7 @@ const NAV_PAGES = {
   'staff-list': { title: 'Staff Records', render: () => renderStaffList(mainBody) },
   'add-staff': { title: 'Add New Staff', render: () => renderStaffForm(mainBody) },
   'edit-staff': { title: 'Edit Staff', render: (params) => renderStaffForm(mainBody, params.staffId) },
-  'attachments': { title: 'Attachments', render: (params) => renderAttachments(mainBody, params.staffId, params.staffName) },
+  'attachments': { title: 'Document Vault', render: (params) => renderAttachments(mainBody, params.staffId, params.staffName, params.staffData) },
   'id-cards': { title: 'Generate ID Cards', render: () => renderIdCardsPage(mainBody) },
 };
 

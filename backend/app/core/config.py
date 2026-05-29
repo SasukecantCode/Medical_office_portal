@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # Local file storage for attachments (MVP)
     uploads_dir: str = str(_DEFAULT_UPLOADS_DIR)
 
+    # Google Cloud Storage (Document Vault)
+    gcs_bucket_name: str = "medical-office-hr-documents"
+    document_max_size_bytes: int = 10 * 1024 * 1024
+
     # Gemini / LLM settings (optional)
     gemini_api_key: str | None = None
     gemini_model: str | None = "models/gemini-2.5-flash"
