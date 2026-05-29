@@ -32,13 +32,14 @@ export async function renderIdCardsPage(container) {
   }
 
   container.innerHTML = `
-    <div class="id-card-controls glass-panel" style="margin-bottom: 24px;">
-      <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
-        <div class="id-card-search-wrapper" style="flex:1; min-width:250px; position:relative;">
-          <input type="text" id="id-card-search" placeholder="Search staff to generate ID..." class="form-input form-input-dark" autocomplete="off" />
+    <div class="id-card-controls idcard-controls-plain" style="margin-bottom: 24px;">
+      <div class="table-controls idcard-controls-bar">
+        <div class="search-box id-card-search-wrapper">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="text" id="id-card-search" placeholder="Search staff to generate ID..." autocomplete="off" />
           <div id="id-card-dropdown" class="autocomplete-dropdown" style="display:none;"></div>
         </div>
-        <div style="display:flex; gap:8px; align-items:center;">
+        <div class="idcard-actions">
           <button id="btn-download-id" class="btn btn-sm btn-ghost" disabled title="Download ID Card">↓ Download</button>
           <button id="btn-print-id" class="btn btn-primary" disabled title="Print ID Card">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
@@ -219,11 +220,10 @@ export async function renderIdCardsPage(container) {
 function renderPreview(staff, container, fieldDefs = []) {
   container.innerHTML = `
     <div class="idcard-live-layout">
-      <section class="idcard-editor-panel glass-panel">
-        <div class="idcard-editor-header">
+      <section class="idcard-editor-panel staff-form-container">
+        <div class="idcard-editor-header staff-form-header">
           <div>
-            <div class="idcard-editor-title">ID Card Editor</div>
-            <div class="idcard-editor-subtitle">Press Enter on a field to save to the staff record.</div>
+            <h3 class="idcard-editor-title">Edit Card</h3>
           </div>
           <span class="idcard-editor-badge">Live</span>
         </div>
@@ -231,11 +231,10 @@ function renderPreview(staff, container, fieldDefs = []) {
           ${renderEditorSections(staff, fieldDefs)}
         </div>
       </section>
-      <section class="idcard-preview-panel glass-panel">
-        <div class="idcard-preview-header">
+      <section class="idcard-preview-panel staff-form-container">
+        <div class="idcard-preview-header staff-form-header">
           <div>
-            <div class="idcard-preview-title">ID Card Preview</div>
-            <div class="idcard-preview-subtitle">Tap the card to flip between front and back.</div>
+            <h3 class="idcard-preview-title">ID Card Preview</h3>
           </div>
           <span class="idcard-preview-badge">Preview</span>
         </div>
@@ -617,6 +616,16 @@ function printIdCard() {
             font-family: Arial, sans-serif;
             color: #002b80;
             padding: 2px;
+          }
+
+          .idc-card * {
+            color: #002b80 !important;
+          }
+
+          .idc-header-left,
+          .idc-header-right {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
           }
         </style>
         <link rel="stylesheet" href="/css/id_card.css">

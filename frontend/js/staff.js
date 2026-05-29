@@ -402,7 +402,7 @@ export async function renderStaffForm(container, staffId = null) {
             <hr class="form-section-divider form-grid-full" />
             <div class="form-group">
               <label class="form-label">Phone</label>
-              <input class="form-input" name="phone" value="${escAttr(staffData.phone || '')}" placeholder="Phone number" />
+              <input class="form-input" name="phone" type="tel" inputmode="numeric" pattern="\+91\d*" value="${escAttr(staffData.phone || '')}" placeholder="+91XXXXXXXXXX" />
             </div>
             <div class="form-group">
               <label class="form-label">Email</label>
@@ -486,6 +486,8 @@ export async function renderStaffForm(container, staffId = null) {
     input.addEventListener('blur', () => group.classList.remove('focused'));
   });
 
+  attachPhonePrefixHandlers(container);
+
   document.getElementById('staff-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -506,6 +508,10 @@ export async function renderStaffForm(container, staffId = null) {
         showToast('Extra field must be valid JSON.', 'error');
         return;
       }
+    }
+
+    if (payload.phone) {
+      payload.phone = normalizePhoneValue(payload.phone);
     }
 
     // Merge custom field values into `extra`
@@ -581,12 +587,14 @@ function renderCustomFieldsHtml(fieldDefs, extra) {
       const label = String(def.label || def.name);
       const required = !!def.required;
       const dataType = String(def.data_type || 'string');
+      const isEmergency = isEmergencyContactField(name, label);
+      const effectiveType = dataType === 'phone' || isEmergency ? 'phone' : dataType;
       const currentValue = extra && typeof extra === 'object' ? extra[name] : undefined;
 
       const inputName = `custom__${name}`;
       const requiredMark = required ? '<span class="required">*</span>' : '';
 
-      if (dataType === 'number') {
+      if (effectiveType === 'number') {
         const v = currentValue === null || currentValue === undefined ? '' : String(currentValue);
         return `
           <div class="form-group">
@@ -596,7 +604,7 @@ function renderCustomFieldsHtml(fieldDefs, extra) {
         `;
       }
 
-      if (dataType === 'date') {
+      if (effectiveType === 'date') {
         const v = currentValue === null || currentValue === undefined ? '' : String(currentValue);
         return `
           <div class="form-group">
@@ -606,7 +614,7 @@ function renderCustomFieldsHtml(fieldDefs, extra) {
         `;
       }
 
-      if (dataType === 'boolean') {
+      if (effectiveType === 'boolean') {
         const val = currentValue === true ? 'true' : currentValue === false ? 'false' : '';
         return `
           <div class="form-group">
@@ -616,6 +624,16 @@ function renderCustomFieldsHtml(fieldDefs, extra) {
               <option value="true" ${val === 'true' ? 'selected' : ''}>Yes</option>
               <option value="false" ${val === 'false' ? 'selected' : ''}>No</option>
             </select>
+          </div>
+        `;
+      }
+
+      if (effectiveType === 'phone') {
+        const v = currentValue === null || currentValue === undefined ? '' : normalizePhoneValue(String(currentValue));
+        return `
+          <div class="form-group">
+            <label class="form-label">${escHtml(label)} ${requiredMark}</label>
+            <input class="form-input" name="${escAttr(inputName)}" type="tel" inputmode="numeric" pattern="\+91\d*" data-phone-prefix="true" ${required ? 'required' : ''} value="${escAttr(v)}" />
           </div>
         `;
       }
@@ -646,17 +664,25 @@ function extractCustomFieldValues(fieldDefs, formData) {
     if (text === '') continue;
 
     const dataType = String(def.data_type || 'string');
-    if (dataType === 'number') {
+    const label = String(def.label || def.name || '');
+    const isEmergency = isEmergencyContactField(name, label);
+    const effectiveType = dataType === 'phone' || isEmergency ? 'phone' : dataType;
+    if (effectiveType === 'number') {
       const n = Number(text);
       if (!Number.isNaN(n)) out[name] = n;
       continue;
     }
 
-    if (dataType === 'boolean') {
+    if (effectiveType === 'boolean') {
       const low = text.toLowerCase();
       if (low === 'true' || low === '1' || low === 'yes' || low === 'y') out[name] = true;
       else if (low === 'false' || low === '0' || low === 'no' || low === 'n') out[name] = false;
       else out[name] = text;
+      continue;
+    }
+
+    if (effectiveType === 'phone') {
+      out[name] = normalizePhoneValue(text);
       continue;
     }
 
@@ -665,6 +691,40 @@ function extractCustomFieldValues(fieldDefs, formData) {
   }
 
   return out;
+}
+
+function attachPhonePrefixHandlers(container) {
+  if (!container) return;
+  const inputs = container.querySelectorAll('input[name="phone"], input[data-phone-prefix="true"]');
+  inputs.forEach((input) => {
+    input.addEventListener('input', () => {
+      const normalized = normalizePhoneValue(input.value || '');
+      if (normalized) {
+        input.value = normalized;
+      }
+    });
+    input.addEventListener('blur', () => {
+      const normalized = normalizePhoneValue(input.value || '');
+      if (normalized) {
+        input.value = normalized;
+      }
+    });
+  });
+}
+
+function normalizePhoneValue(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  const digitsOnly = raw.replace(/\D+/g, '');
+  const withoutPrefix = digitsOnly.replace(/^91/, '');
+  if (!withoutPrefix) return '+91';
+  return `+91${withoutPrefix}`;
+}
+
+function isEmergencyContactField(name, label) {
+  const joined = `${name} ${label}`.toLowerCase();
+  return (joined.includes('emergency') || joined.includes('emergancy')) && joined.includes('contact');
 }
 
 // ════════════════════════════════════════════
