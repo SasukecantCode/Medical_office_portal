@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     gcs_bucket_name: str = "medical-office-hr-documents"
     document_max_size_bytes: int = 10 * 1024 * 1024
 
+    # Public base URL for export links (falls back to request host)
+    public_base_url: str | None = None
+
     # Gemini / LLM settings (optional)
     gemini_api_key: str | None = None
     gemini_model: str | None = "models/gemini-2.5-flash"

@@ -1,7 +1,7 @@
 /* ID Card Styles */
 .idc-card {
-  width: 86mm;
-  height: 54mm;
+  width: 96mm;
+  height: 62mm;
   border: 3px solid #002b80;
   border-radius: 6px;
   background: white;
@@ -10,8 +10,15 @@
   font-family: Arial, sans-serif;
   color: #002b80;
   box-sizing: border-box;
-  box-shadow: inset 0 0 0 1px white, inset 0 0 0 2px #002b80;
   margin-bottom: 20px;
+  isolation: isolate;
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
+  cursor: pointer;
+}
+
+.idc-card:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 12px 24px rgba(0,0,0,0.2), inset 0 0 0 1px white, inset 0 0 0 2px #002b80;
 }
 
 /* Front Side */
@@ -158,10 +165,12 @@
 }
 
 .idc-vertical-text span {
-  transform: rotate(-90deg);
-  white-space: nowrap;
-  font-size: 8px;
+  width: 58mm; /* roughly the internal height of the card */
+  white-space: normal;
+  text-align: center;
+  font-size: 7px;
   font-weight: bold;
+  transform: rotate(-90deg);
 }
 
 .idc-back-content {
@@ -180,15 +189,17 @@
 }
 
 .idc-row-top {
-  height: 40%;
+  padding-bottom: 2px;
 }
 
 .idc-row-mid {
-  height: 30%;
+  padding-bottom: 2px;
+  padding-top: 2px;
 }
 
 .idc-row-bot {
-  height: 30%;
+  flex: 1;
+  border-bottom: none;
 }
 
 .idc-col {
@@ -251,17 +262,410 @@
   min-height: 7px;
 }
 
-/* UI Wrapper for the preview container */
-.id-card-wrapper {
+.id-card-flip-wrapper {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  position: relative;
+  width: 100%;
 }
-.id-card-label {
+
+.id-card-expand-btn {
+  position: absolute;
+  top: -20px;
+  right: -20px;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.id-card-expand-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.id-card-flip-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12px;
+  margin-bottom: 60px; /* Space for the scaled up card */
   font-weight: 600;
-  color: #333;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  background: rgba(7, 41, 44, 0.45);
+  padding: 8px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+}
+
+.id-card-flip-container {
+  perspective: 1500px;
+  cursor: pointer;
+  transform: none;
+  transform-origin: center top;
+  margin-bottom: 40px; /* Space for card */
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+.id-card-flipper {
+  width: 96mm;
+  height: 62mm;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.id-card-flip-container.flipped .id-card-flipper {
+  transform: translateZ(0) rotateY(180deg);
+}
+
+.id-card-front, .id-card-back {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: 6px;
+  transform: translateZ(0);
+}
+
+.id-card-back {
+  transform: rotateY(180deg);
+}
+
+/* Override .idc-card for flip context */
+.id-card-flip-container .idc-card {
+  margin: 0;
+  box-shadow: none;
+  transition: none;
+  image-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+.id-card-flip-container .idc-card:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* Fixes for autocomplete and layout */
+.id-card-controls {
+  position: relative;
+  z-index: 5;
+  overflow: visible !important;
+  isolation: auto !important;
+}
+
+#id-card-preview-shell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 40px;
+  margin-top: 16px;
+  position: relative;
+  z-index: 1;
+  min-height: calc(100vh - 280px);
+}
+
+.idcard-live-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+  width: 100%;
+}
+
+.idcard-editor-panel,
+.idcard-preview-panel {
+  border-radius: var(--radius-2xl);
+  background: rgba(10, 18, 28, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: var(--glass-card-shadow);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  position: relative;
+  overflow: hidden;
+}
+
+.idcard-editor-panel::before,
+.idcard-preview-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    transparent 40%
+  );
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.idcard-editor-panel > *,
+.idcard-preview-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.idcard-editor {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.idcard-editor-header {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  letter-spacing: 0.02em;
+}
+
+.idcard-editor-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+}
+
+.idcard-editor-header,
+.idcard-preview-header {
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(135deg, rgba(12, 74, 78, 0.45), rgba(13, 24, 34, 0.55));
+}
+
+.idcard-editor-title,
+.idcard-preview-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.98);
+}
+
+.idcard-editor-subtitle,
+.idcard-preview-subtitle {
   font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+  margin-top: 2px;
+}
+
+.idcard-editor-badge,
+.idcard-preview-badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.idcard-editor-sections {
+  padding: 16px 18px 20px;
+  display: grid;
+  gap: 12px;
+  max-height: calc(100vh - 360px);
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+.idcard-editor-section {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.idcard-editor-section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.82);
+  margin-bottom: 10px;
+}
+
+.idcard-editor-section-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.idcard-editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  min-width: 0;
+}
+
+.idcard-editor-field label {
+  white-space: normal;
+  word-wrap: break-word;
+  line-height: 1.3;
+}
+
+.idcard-editor-field input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  background: rgba(6, 18, 26, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  color: rgba(255, 255, 255, 0.98);
+  padding: 9px 12px;
+  font-size: 12px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.idcard-editor-field input:focus {
+  border-color: rgba(198, 151, 63, 0.5);
+  box-shadow: 0 0 0 3px rgba(198, 151, 63, 0.15), 0 0 20px rgba(198, 151, 63, 0.06);
+  background: rgba(7, 24, 34, 0.65);
+}
+
+.idcard-preview-panel {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+}
+
+.idcard-preview-stage {
+  padding: 18px 12px 22px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 420px;
+}
+
+.idcard-preview-col {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.idcard-shift-right {
+  transform: translateX(16px);
+}
+
+.idcard-preview-panel .id-card-flip-hint {
+  background: rgba(7, 41, 44, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.idcard-editor-sections::-webkit-scrollbar {
+  width: 6px;
+}
+
+.idcard-editor-sections::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+}
+
+.idcard-editor-sections::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (max-width: 1100px) {
+  .idcard-live-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .idcard-editor-section-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .idcard-shift-right {
+    transform: translateX(0);
+  }
+}
+
+.autocomplete-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background: rgba(10, 15, 22, 0.4);
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-lg);
+  max-height: 300px;
+  overflow-y: auto;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 16px 48px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  z-index: 1000;
+  padding: 4px;
+}
+
+.autocomplete-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.9);
+  transition: all 0.2s ease;
+  margin-bottom: 2px;
+}
+
+.autocomplete-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateX(4px);
+}
+
+.autocomplete-item .item-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--clr-primary), var(--clr-primary-dark));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.autocomplete-item .item-avatar-img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
 }
