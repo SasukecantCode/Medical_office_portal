@@ -80,8 +80,16 @@ window._navigateTo = function navigateTo(pageKey, params = {}) {
   mainBody.classList.remove('page-enter');
   mainBody.classList.add('page-exit');
 
-  setTimeout(() => {
-    page.render(params);
+  setTimeout(async () => {
+    try {
+      const renderResult = page.render(params);
+      if (renderResult instanceof Promise) {
+        await renderResult;
+      }
+    } catch (err) {
+      console.error("Render error:", err);
+    }
+    
     mainBody.classList.remove('page-exit');
     mainBody.classList.add('page-enter');
     requestAnimationFrame(() => {

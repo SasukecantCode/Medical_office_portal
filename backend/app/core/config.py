@@ -3,9 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
+from dotenv import load_dotenv
 
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
+load_dotenv(dotenv_path=str(_BACKEND_DIR / ".env"))
+
 _DEFAULT_DB_PATH = _BACKEND_DIR / "portal.db"
 _DEFAULT_UPLOADS_DIR = _BACKEND_DIR / "uploads"
 

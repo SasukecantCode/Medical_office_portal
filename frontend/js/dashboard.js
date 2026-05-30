@@ -111,7 +111,7 @@ export async function renderDashboardHome(container) {
     </div>
 
     <!-- Middle Row: Charts -->
-    <div class="dashboard-grid-row grid-cols-2">
+    <div class="dashboard-grid-row grid-cols-3">
       <!-- Staff Allocation -->
       <div class="glass-panel chart-card panel-enter">
         <div class="panel-header">
@@ -123,28 +123,25 @@ export async function renderDashboardHome(container) {
         </div>
       </div>
 
+      <!-- Facility Ranking -->
+      <div class="glass-panel chart-card panel-enter">
+        <div class="panel-header">
+          <span class="panel-title">Facility Ranking</span>
+          <span style="font-size:12px; color:rgba(255,255,255,0.5)">By manpower</span>
+        </div>
+        <div class="h-chart-list" id="facility-chart">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+
       <!-- Growth / Historical -->
       <div class="glass-panel chart-card panel-enter">
         <div class="panel-header">
           <span class="panel-title">Department Growth</span>
           <span style="font-size:12px; color:rgba(255,255,255,0.5)">Monthly Trend ></span>
         </div>
-        <div class="chart-content">
-          <div class="chart-grid-lines">
-            <div class="chart-grid-line"></div>
-            <div class="chart-grid-line"></div>
-            <div class="chart-grid-line"></div>
-            <div class="chart-grid-line"></div>
-            <div class="chart-grid-line"></div>
-          </div>
-          <!-- Pseudo Bar Chart -->
-          <div class="bar-col"><div class="bar-wrap"><div class="bar-fill" style="height:30%"></div></div><span class="bar-label">Jan</span></div>
-          <div class="bar-col"><div class="bar-wrap"><div class="bar-fill" style="height:45%"></div></div><span class="bar-label">Feb</span></div>
-          <div class="bar-col"><div class="bar-wrap"><div class="bar-fill" style="height:60%"></div></div><span class="bar-label">Mar</span></div>
-          <div class="bar-col"><div class="bar-wrap"><div class="bar-fill" style="height:40%"></div></div><span class="bar-label">Apr</span></div>
-          <div class="bar-col"><div class="bar-wrap"><div class="bar-fill-secondary" style="height:40%"></div><div class="bar-fill" style="height:50%"></div></div><span class="bar-label" style="color:white; font-weight:600;">May</span></div>
-          <div class="bar-col"><div class="bar-wrap"><div class="bar-fill-secondary" style="height:30%"></div><div class="bar-fill" style="height:45%"></div></div><span class="bar-label">Jun</span></div>
-          <div class="bar-col"><div class="bar-wrap"><div class="bar-fill-secondary" style="height:20%"></div><div class="bar-fill" style="height:35%"></div></div><span class="bar-label">Jul</span></div>
+        <div class="chart-content" id="growth-chart">
+          <!-- Filled by JS -->
         </div>
       </div>
     </div>
@@ -283,6 +280,64 @@ export async function renderDashboardHome(container) {
         </div>
       `;
     }).join('');
+
+    // Populate Facility Ranking (Middle Row)
+    const facilityChart = document.getElementById('facility-chart');
+    const facilities = (dashboardData.by_facility || []).sort((a, b) => b.count - a.count);
+    const topFacilities = facilities.slice(0, 4);
+    facilityChart.innerHTML = topFacilities.map((d, i) => {
+      const colors = ['#C6973F', '#14B8A6', '#6366F1', '#10B981'];
+      const maxCount = topFacilities[0]?.count || 1;
+      const flexBasis = Math.max(10, (d.count / maxCount) * 100);
+      return `
+        <div class="h-chart-item">
+          <div class="h-chart-label" title="${d.key}">${d.key}</div>
+          <div class="h-chart-bars">
+            <div class="h-bar-segment" style="width: ${flexBasis}%; background: ${colors[i]};"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Populate Growth Chart (Middle Row)
+    const growthChart = document.getElementById('growth-chart');
+    const monthlyData = (dashboardData.by_month || []).slice(-7); // take last 7 months
+    if (monthlyData.length === 0) {
+      growthChart.innerHTML = '<div style="color:rgba(255,255,255,0.5);text-align:center;width:100%;padding-top:2rem;">No historical data available</div>';
+    } else {
+      const maxCount = Math.max(...monthlyData.map(d => d.count), 1);
+      
+      const gridLinesHtml = `
+        <div class="chart-grid-lines">
+          <div class="chart-grid-line"></div>
+          <div class="chart-grid-line"></div>
+          <div class="chart-grid-line"></div>
+          <div class="chart-grid-line"></div>
+          <div class="chart-grid-line"></div>
+        </div>`;
+        
+      const barsHtml = monthlyData.map((d, i) => {
+        // e.g. "2024-05"
+        const [yyyy, mm] = d.key.split('-');
+        const dateObj = new Date(yyyy, mm - 1);
+        const monthStr = dateObj.toLocaleString('default', { month: 'short' }).toUpperCase();
+        const yy = yyyy.substring(2);
+        const monthLabel = `${monthStr} '${yy}`;
+        const pct = Math.max(5, (d.count / maxCount) * 100);
+        const isLatest = (i === monthlyData.length - 1);
+        
+        return `
+          <div class="bar-col" title="${d.key}: ${d.count} staff">
+            <div class="bar-wrap">
+              <div class="bar-fill${isLatest ? ' highlight' : ''}" style="height:${pct}%"></div>
+            </div>
+            <span class="bar-label" style="${isLatest ? 'color:white; font-weight:600;' : ''}">${monthLabel}</span>
+          </div>
+        `;
+      }).join('');
+      
+      growthChart.innerHTML = gridLinesHtml + barsHtml;
+    }
 
     // Populate Bottom Table
     const tbody = document.getElementById('dash-table-body');

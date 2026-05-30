@@ -112,10 +112,33 @@ def update_staff(db: Session, staff_id: int, payload: HRStaffUpdate) -> HRStaff 
     if staff is None:
         return None
 
+    old_name = staff.full_name
+
     data = payload.model_dump(exclude_unset=True)
     _apply_case_normalization(data)
     for key, value in data.items():
         setattr(staff, key, value)
+
+    new_name = staff.full_name
+
+    if old_name != new_name:
+        import re
+        def _safe_name(n: str) -> str:
+            n = (n or 'Unknown').strip()
+            n = re.sub(r'[^a-zA-Z0-9_\-\s]', '', n)
+            return re.sub(r'\s+', '_', n)
+
+        old_emp_id = f"{_safe_name(old_name)}_EMP{staff_id:03d}"
+        new_emp_id = f"{_safe_name(new_name)}_EMP{staff_id:03d}"
+        
+        from app.services.document_storage import get_document_storage_service
+        try:
+            storage = get_document_storage_service()
+            if hasattr(storage, "rename_employee_folder"):
+                storage.rename_employee_folder(old_emp_id, new_emp_id)
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to rename document folder on name change: {e}")
 
     db.add(staff)
     db.commit()
@@ -160,7 +183,44 @@ def delete_staff(db: Session, staff_id: int) -> bool:
     staff.deleted_at = datetime.utcnow()
     db.add(staff)
     db.commit()
+
+    # Clear attachments from cloud
+    try:
+        from app.services.document_storage import get_document_storage_service
+        storage = get_document_storage_service()
+        employee_id = f"{staff.full_name}_EMP{staff.id:03d}"
+        storage.delete_employee_folder(employee_id)
+    except Exception as e:
+        import logging
+        logging.warning(f"Failed to delete document folder for staff {staff.id}: {e}")
+
     return True
+
+
+def delete_all_staff(db: Session) -> int:
+    # Get all non-deleted staff before updating
+    staff_to_delete = db.execute(select(HRStaff).where(HRStaff.deleted_at.is_(None))).scalars().all()
+    
+    stmt = (
+        update(HRStaff)
+        .where(HRStaff.deleted_at.is_(None))
+        .values(deleted_at=datetime.utcnow())
+    )
+    result = db.execute(stmt)
+    db.commit()
+    
+    # Clear all attachments from cloud
+    try:
+        from app.services.document_storage import get_document_storage_service
+        storage = get_document_storage_service()
+        for staff in staff_to_delete:
+            employee_id = f"{staff.full_name}_EMP{staff.id:03d}"
+            storage.delete_employee_folder(employee_id)
+    except Exception as e:
+        import logging
+        logging.warning(f"Failed to delete document folders during bulk delete: {e}")
+        
+    return result.rowcount
 
 
 def export_staff_rows(
@@ -241,11 +301,23 @@ def dashboard_summary(db: Session) -> dict:
             out.append({"key": label, "count": r.count})
         return out
 
+    # Monthly trend using date_of_joining
+    dates = db.execute(select(HRStaff.date_of_joining).where(base_where)).scalars().all()
+    by_month = {}
+    for d in dates:
+        if d:
+            month_key = d.strftime("%Y-%m")
+            by_month[month_key] = by_month.get(month_key, 0) + 1
+    
+    monthly_trend = [{"key": k, "count": v} for k, v in sorted(by_month.items())]
+
     return {
         "totals": {"staff": total_staff},
         "by_designation": grouped(HRStaff.designation),
         "by_district": grouped_case_insensitive(HRStaff.district),
         "by_employment_type": grouped(HRStaff.employment_type),
+        "by_facility": grouped_case_insensitive(HRStaff.facility_name),
+        "by_month": monthly_trend,
     }
 
 

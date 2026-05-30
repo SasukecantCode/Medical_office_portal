@@ -775,6 +775,10 @@
   transition: height 1s ease;
   min-height: 4px;
 }
+.bar-fill.highlight {
+  background: linear-gradient(180deg, var(--clr-accent-light), var(--clr-accent));
+  box-shadow: 0 0 12px rgba(198, 151, 63, 0.4);
+}
 .bar-fill-secondary {
   background: repeating-linear-gradient(
     45deg,

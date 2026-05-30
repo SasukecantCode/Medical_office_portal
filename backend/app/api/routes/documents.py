@@ -47,15 +47,6 @@ def upload_document(
     return storage.upload_employee_document(employee_id, category, file)
 
 
-@router.get("/{employee_id}", response_model=DocumentListRead)
-def list_documents(
-    employee_id: str,
-    storage=Depends(get_document_storage_service),
-):
-    employee_id = validate_employee_id(employee_id)
-    items = storage.list_employee_documents(employee_id)
-    return {"employee_id": employee_id, "documents": items}
-
 
 @router.get("/download")
 def download_document(
@@ -68,7 +59,7 @@ def download_document(
     blob = storage.download_document(employee_id, file_path)
     filename = file_path.split("/", 1)[-1]
     stream = blob.open("rb")
-    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    headers = {"Content-Disposition": f'inline; filename="{filename}"'}
     return StreamingResponse(stream, media_type=blob.content_type or "application/octet-stream", headers=headers)
 
 
@@ -118,3 +109,12 @@ def download_employee_zip(
     zip_buffer.seek(0)
     headers = {"Content-Disposition": f'attachment; filename="{employee_id}_Documents.zip"'}
     return StreamingResponse(zip_buffer, media_type="application/zip", headers=headers)
+
+@router.get("/{employee_id}", response_model=DocumentListRead)
+def list_documents(
+    employee_id: str,
+    storage=Depends(get_document_storage_service),
+):
+    employee_id = validate_employee_id(employee_id)
+    items = storage.list_employee_documents(employee_id)
+    return {"employee_id": employee_id, "documents": items}

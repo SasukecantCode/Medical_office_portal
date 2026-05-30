@@ -76,7 +76,9 @@ function sortDocs(docs) {
 }
 
 export async function renderVault(container, staffId, staffName, staffData) {
-  const empId = `EMP${String(staffId).padStart(3, '0')}`;
+  const empIdRaw = `EMP${String(staffId).padStart(3, '0')}`;
+  const safeName = (staffName || 'Unknown').replace(/[^a-zA-Z0-9_\-\s]/g, '').trim().replace(/\s+/g, '_');
+  const empId = `${safeName}_${empIdRaw}`;
   const photoUrl = staffData?.photo_url || '';
   const initial = (staffName || '?').charAt(0).toUpperCase();
 
@@ -96,7 +98,7 @@ export async function renderVault(container, staffId, staffName, staffData) {
           </div>
           <div class="vault-header-info">
             <h3>${esc(staffName)}'s Files</h3>
-            <p>Employee ${esc(empId)} — Document Vault</p>
+            <p>Employee ${esc(empIdRaw)} — Document Vault</p>
           </div>
         </div>
         <div class="vault-header-actions">
@@ -231,7 +233,7 @@ function buildTable(docs, empId, showCategory) {
   const rows = docs.map(d => `
     <tr data-path="${escA(d.file_path)}">
       <td>
-        <div class="vault-file-name-cell">
+        <div class="vault-file-name-cell" style="cursor: pointer;" data-action="preview">
           <div class="vault-file-icon ${fileIconClass(d.file_name)}">${fileEmoji(d.file_name)}</div>
           <span class="vault-file-name" title="${escA(d.file_name)}">${esc(d.file_name)}</span>
         </div>
@@ -260,7 +262,73 @@ function buildTable(docs, empId, showCategory) {
   </table>`;
 }
 
+function openPreviewModal(url, filename) {
+  const ext = (filename || '').split('.').pop().toLowerCase();
+  
+  let content = '';
+  let showLoader = false;
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
+    content = `<img src="${escA(url)}" class="preview-media" alt="${escA(filename)}" onload="const l = this.parentElement.querySelector('.vault-preview-loader'); if(l) l.style.display='none'" />`;
+    showLoader = true;
+  } else if (ext === 'pdf') {
+    content = `<iframe src="${escA(url)}" class="preview-media preview-pdf" onload="const l = this.parentElement.querySelector('.vault-preview-loader'); if(l) l.style.display='none'"></iframe>`;
+    showLoader = true;
+  } else {
+    content = `<div class="preview-unsupported">
+      ${ICON_SVG.empty}
+      <p>Preview not available for .${esc(ext)} files</p>
+      <a href="${escA(url)}" download class="btn btn-primary">Download File</a>
+    </div>`;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'vault-preview-overlay';
+  overlay.innerHTML = `
+    <div class="vault-preview-card">
+      <div class="vault-preview-header">
+        <h3 title="${escA(filename)}">${esc(filename)}</h3>
+        <button class="vault-preview-close">&times;</button>
+      </div>
+      <div class="vault-preview-body">
+        ${showLoader ? `<div class="vault-preview-loader"><div class="vault-spinner"></div></div>` : ''}
+        ${content}
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  // Trigger reflow for animation
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      overlay.classList.add('visible');
+    });
+  });
+
+  const closeBtn = overlay.querySelector('.vault-preview-close');
+  const close = () => {
+    overlay.classList.remove('visible');
+    setTimeout(() => overlay.remove(), 300);
+  };
+
+  closeBtn.addEventListener('click', close);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) close();
+  });
+}
+
 function wireRowActions(listEl, empId) {
+  listEl.querySelectorAll('[data-action="preview"]').forEach(el => {
+    el.addEventListener('click', () => {
+      const row = el.closest('tr');
+      const path = row.dataset.path;
+      const nameSpan = row.querySelector('.vault-file-name');
+      const filename = nameSpan.textContent;
+      const url = api.downloadDocumentUrl(empId, path);
+      openPreviewModal(url, filename);
+    });
+  });
+
   listEl.querySelectorAll('[data-action="delete"]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const row = btn.closest('tr');
