@@ -2,25 +2,63 @@
    Landing — Hero + Login (dark theme)
    ═══════════════════════════════════════════════════════ */
 
+/* ── Landing text fade-in ── */
+@keyframes landingTextFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+:root {
+  --landing-scroll-progress: 0;
+  --landing-scroll-drift: 0;
+}
+
+body.landing-scroll-active .global-bg-image {
+  animation: none;
+  transform:
+    scale(calc(1 + var(--landing-scroll-progress) * 0.04))
+    translate3d(
+      calc(var(--landing-scroll-drift) * -10px),
+      calc(var(--landing-scroll-progress) * -4%),
+      0
+    );
+}
+
 /* ── Global ambient background (persists on all views) ── */
 .global-bg {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
+  overflow: hidden;
+  background: #0a1118;
 }
 
 .global-bg-image {
   position: absolute;
-  inset: 0;
+  top: -15%;
+  left: -15%;
+  width: 130%;
+  height: 130%;
   background: url('/assets/namsai_coverpage.png') center center / cover no-repeat;
-  transform: scale(1.03);
+  transform: scale(1) translateZ(0);
+  transform-origin: center center;
   animation: heroImageKen 40s ease-in-out infinite alternate;
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 @keyframes heroImageKen {
-  0% { transform: scale(1.03) translate(0, 0); }
-  100% { transform: scale(1.08) translate(-0.5%, -0.5%); }
+  0% { transform: scale(1) translate(0, 0); }
+  100% { transform: scale(1.04) translate(-0.3%, -0.3%); }
 }
 
 .global-bg-overlay {
@@ -127,8 +165,7 @@ body.dashboard-active .global-bg-overlay {
   text-transform: uppercase;
   margin-bottom: var(--space-md);
   opacity: 0;
-  transform: translateY(40px);
-  animation: fadeUp 1.1s var(--ease-out-expo) 0.55s forwards;
+  animation: landingTextFadeIn 1.4s var(--ease-out-expo) 0.55s forwards;
 }
 
 .hero-title {
@@ -147,21 +184,27 @@ body.dashboard-active .global-bg-overlay {
   background-clip: text;
   -webkit-text-fill-color: transparent;
   opacity: 0;
-  transform: translateY(40px);
-  animation: fadeUp 1.1s var(--ease-out-expo) 0.7s forwards;
+  animation: landingTextFadeIn 1.4s var(--ease-out-expo) 0.75s forwards;
+}
+
+.hero-title-line1.hero-title-accent {
+  background: linear-gradient(to right, var(--clr-accent-light), rgba(255, 255, 255, 0.95), var(--clr-accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.01em;
 }
 
 .hero-title-line2 {
   display: block;
-  font-size: clamp(var(--text-2xl), 4vw, var(--text-5xl));
-  background: linear-gradient(to right, var(--clr-accent-light), rgba(255, 255, 255, 0.9), var(--clr-accent));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  font-size: clamp(var(--text-xl), 3vw, var(--text-3xl));
+  color: rgba(255, 255, 255, 0.75);
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-top: 12px;
   opacity: 0;
-  transform: translateY(40px);
-  animation: fadeUp 1.1s var(--ease-out-expo) 0.95s forwards;
-  margin-top: 8px;
+  animation: landingTextFadeIn 1.4s var(--ease-out-expo) 1s forwards;
 }
 
 .hero-cta {
@@ -262,13 +305,11 @@ body.dashboard-active .global-bg-overlay {
     inset 0 1px 0 rgba(255, 255, 255, 0.1),
     inset 0 -1px 0 rgba(0, 0, 0, 0.1);
   opacity: 0;
-  transform: translateY(40px);
-  transition: opacity 0.9s var(--ease-out-expo), transform 0.9s var(--ease-out-expo);
+  transition: opacity 0.9s var(--ease-out-expo);
 }
 
 .login-card.in-view {
   opacity: 1;
-  transform: translateY(0);
 }
 
 .login-emblem-img {
@@ -287,6 +328,7 @@ body.dashboard-active .global-bg-overlay {
   text-align: center;
   color: white;
   margin-bottom: 4px;
+  opacity: 0;
 }
 
 .login-subtitle {
@@ -294,6 +336,15 @@ body.dashboard-active .global-bg-overlay {
   color: var(--clr-text-white-40);
   font-size: var(--text-sm);
   margin-bottom: var(--space-xl);
+  opacity: 0;
+}
+
+.login-card.in-view .login-title {
+  animation: landingTextFadeIn 1.2s var(--ease-out-expo) 0.2s forwards;
+}
+
+.login-card.in-view .login-subtitle {
+  animation: landingTextFadeIn 1.2s var(--ease-out-expo) 0.35s forwards;
 }
 
 .login-form {
@@ -395,6 +446,11 @@ body.dashboard-active .global-bg-overlay {
   color: var(--clr-text-white-40);
   font-size: var(--text-xs);
   line-height: 1.6;
+  opacity: 0;
+}
+
+.login-card.in-view .login-footer {
+  animation: landingTextFadeIn 1.2s var(--ease-out-expo) 0.5s forwards;
 }
 
 /* ── Particles ── */

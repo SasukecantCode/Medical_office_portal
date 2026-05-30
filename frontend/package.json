@@ -16,6 +16,8 @@
     "vite": "^8.0.13"
   },
   "dependencies": {
-    "html2canvas": "^1.4.1"
+    "geist": "^1.7.1",
+    "html2canvas": "^1.4.1",
+    "jszip": "^3.10.1"
   }
 }

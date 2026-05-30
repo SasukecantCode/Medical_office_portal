@@ -211,3 +211,46 @@ export function initButtonRipples() {
     btn.style.setProperty('--mouse-y', `${y}%`);
   });
 }
+
+/**
+ * Export dropdown — Excel / CSV picker
+ */
+export function initExportDropdown(root, onExport) {
+  const trigger = root.querySelector('[data-export-trigger]');
+  const menu = root.querySelector('.export-dropdown-menu');
+  if (!trigger || !menu) return;
+
+  const close = () => {
+    root.classList.remove('open');
+    trigger.setAttribute('aria-expanded', 'false');
+  };
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const willOpen = !root.classList.contains('open');
+    document.querySelectorAll('.export-dropdown.open').forEach((el) => {
+      if (el !== root) {
+        el.classList.remove('open');
+        el.querySelector('[data-export-trigger]')?.setAttribute('aria-expanded', 'false');
+      }
+    });
+    root.classList.toggle('open', willOpen);
+    trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+  });
+
+  menu.querySelectorAll('[data-export-format]').forEach((item) => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onExport(item.dataset.exportFormat);
+      close();
+    });
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!root.contains(e.target)) close();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') close();
+  });
+}

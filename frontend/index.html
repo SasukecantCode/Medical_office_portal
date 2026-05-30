@@ -2,14 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Data Portal — Directorate of Health & Family Welfare, Arunachal Pradesh</title>
-  <meta name="description" content="Data Portal for managing healthcare staff records across Arunachal Pradesh. Directorate of Health & Family Welfare, Government of Arunachal Pradesh." />
-
-  <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Data Portal — Office of The DMO, Namsai</title>
+  <meta name="description" content="Data Portal for managing healthcare staff records. Office of The DMO, Namsai — Government of Arunachal Pradesh." />
 
   <!-- Styles -->
   <link rel="stylesheet" href="/css/variables.css" />
@@ -46,8 +41,8 @@
         <p class="hero-govt-label">Govt. of Arunachal Pradesh</p>
 
         <h1 class="hero-title">
-          <span class="hero-title-line1">Directorate of Health</span>
-          <span class="hero-title-line1" style="animation-delay: 0.85s;">&amp; Family Welfare</span>
+          <span class="hero-title-line1">Office of The DMO,</span>
+          <span class="hero-title-line1 hero-title-accent" style="animation-delay: 0.75s;">Namsai</span>
           <span class="hero-title-line2">Data Portal</span>
         </h1>
 
@@ -105,7 +100,7 @@
         </form>
 
         <div class="login-footer">
-          Directorate of Health &amp; Family Welfare<br />
+          Office of The DMO, Namsai<br />
           Government of Arunachal Pradesh
         </div>
       </div>
@@ -117,19 +112,23 @@
        ═══════════════════════════════════════════════════ -->
   <div id="dashboard-view" class="dashboard">
 
-    <!-- Mobile sidebar toggle -->
-    <button class="sidebar-toggle" id="sidebar-toggle">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    <!-- Mobile sidebar toggle — liquid glass -->
+    <button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Open navigation menu" aria-expanded="false" aria-controls="main-sidebar">
+      <span class="sidebar-toggle-icon" aria-hidden="true">
+        <span class="sidebar-toggle-line"></span>
+        <span class="sidebar-toggle-line"></span>
+        <span class="sidebar-toggle-line"></span>
+      </span>
     </button>
-    <div class="sidebar-overlay"></div>
+    <div class="sidebar-overlay" id="sidebar-overlay" aria-hidden="true"></div>
 
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="main-sidebar">
       <div class="sidebar-brand">
         <img src="/assets/logo.png" alt="Arunachal Pradesh" class="sidebar-brand-logo" />
         <div>
           <div class="sidebar-brand-title">Data Portal</div>
-          <div class="sidebar-brand-sub">Directorate of Health &amp; Family Welfare</div>
+          <div class="sidebar-brand-sub">Office of The DMO, Namsai</div>
         </div>
       </div>
 
@@ -153,10 +152,6 @@
       </nav>
 
       <div class="sidebar-footer">
-        <div class="sidebar-export-row">
-          <button type="button" class="btn btn-secondary btn-sm" id="export-xlsx">📊 Excel</button>
-          <button type="button" class="btn btn-secondary btn-sm" id="export-csv">📄 CSV</button>
-        </div>
         <button class="sidebar-logout" id="logout-btn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           Logout
@@ -170,7 +165,7 @@
         <div class="chat-header-main">
           <h3 class="chat-title">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            Import Assistant
+            DMO Office AI assistant
           </h3>
           <label class="chat-thread-wrap" for="chat-thread-select">
             <span>Chat</span>
@@ -193,7 +188,7 @@
       <div class="chat-messages" id="chat-messages">
         <div class="chat-message system">
           <div class="message-bubble">
-            <p>👋 Hi! I'm your import assistant. Upload a CSV or XLSX file to get started.</p>
+            <p>👋 Hi! I'm your DMO Office AI assistant. Upload a CSV or XLSX file to get started.</p>
           </div>
         </div>
       </div>
@@ -213,7 +208,7 @@
     </div>
 
     <!-- Chat Toggle Button (for mobile/collapsed state) -->
-    <button class="chat-toggle" id="chat-toggle" title="Open Import Assistant">
+    <button class="chat-toggle" id="chat-toggle" title="Open DMO Office AI assistant">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
     </button>
 

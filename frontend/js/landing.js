@@ -3,8 +3,22 @@
    ═══════════════════════════════════════════════════════ */
 
 import { initScrollAnimations, createParticles, showToast } from './animations.js';
+import { initAtmosphericScroll } from './landing-scroll.js';
+
+let destroyScroll = null;
+
+function startAtmosphericScroll() {
+  destroyScroll?.();
+  destroyScroll = initAtmosphericScroll();
+}
+
+export function restartLandingScroll() {
+  startAtmosphericScroll();
+}
 
 export function initLanding(onLoginSuccess) {
+  startAtmosphericScroll();
+
   // Init scroll animations for login card
   initScrollAnimations();
 
@@ -101,4 +115,11 @@ export function initLanding(onLoginSuccess) {
     `;
     document.head.appendChild(style);
   }
+
+  window.addEventListener('landing-scroll-destroy', () => {
+    destroyScroll?.();
+    destroyScroll = null;
+  });
+
+  return destroyScroll;
 }

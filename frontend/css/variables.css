@@ -103,8 +103,8 @@
   --radius-full: 9999px;
 
   /* ── Typography ── */
-  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-heading: 'Outfit', 'Inter', system-ui, sans-serif;
+  --font-body: 'Geist Sans', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Geist Sans', system-ui, -apple-system, sans-serif;
 
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;

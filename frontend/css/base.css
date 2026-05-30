@@ -2,6 +2,14 @@
    Base — Reset, Typography, Utilities
    ═══════════════════════════════════════════════════════ */
 
+@font-face {
+  font-family: 'Geist Sans';
+  src: url('/assets/fonts/GeistSans-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -12,6 +20,8 @@ html {
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -22,6 +32,11 @@ body {
   background: var(--clr-bg-dark);
   overflow-x: hidden;
   min-height: 100vh;
+  text-rendering: optimizeLegibility;
+}
+
+body.sidebar-open {
+  overflow: hidden;
 }
 
 a {
@@ -32,6 +47,13 @@ a {
 img {
   max-width: 100%;
   display: block;
+  image-rendering: auto;
+}
+
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  img {
+    image-rendering: -webkit-optimize-contrast;
+  }
 }
 
 button {

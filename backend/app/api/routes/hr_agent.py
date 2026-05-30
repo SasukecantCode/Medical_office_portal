@@ -195,7 +195,7 @@ def apply_import(
 
 
 @router.post("/chat")
-def chat_endpoint(prompt: dict, db: Session = Depends(get_db)):
+def chat_endpoint(prompt: dict, request: Request, db: Session = Depends(get_db)):
     """Chat endpoint with two modes:
     - ask: plain Gemini response
     - agent: Gemini + backend tool calls
@@ -265,6 +265,99 @@ def chat_endpoint(prompt: dict, db: Session = Depends(get_db)):
                 for r in rows
             ],
         }
+
+    def _tool_bulk_id_cards(args: dict) -> dict:
+        limit = int(args.get("limit", 500) or 500)
+        limit = max(1, min(limit, 500))
+        rows = crud_staff.list_staff(
+            db,
+            skip=0,
+            limit=limit,
+            q=args.get("q"),
+            district=args.get("district"),
+            designation=args.get("designation"),
+            facility_name=args.get("facility_name"),
+            employment_type=args.get("employment_type"),
+        )
+        base_url = str(request.base_url).rstrip("/") if request else ""
+
+        def _staff_to_card_dict(s) -> dict:
+            photo_url = ""
+            if getattr(s, "profile_photo_stored_filename", None):
+                photo_url = f"{base_url}/api/hr/staff/{s.id}/photo"
+            return {
+                "id": s.id,
+                "full_name": s.full_name,
+                "gender": s.gender,
+                "designation": s.designation,
+                "cadre": s.cadre,
+                "employment_type": s.employment_type,
+                "facility_name": s.facility_name,
+                "facility_type": s.facility_type,
+                "posting_place": s.posting_place,
+                "block": s.block,
+                "district": s.district,
+                "date_of_birth": s.date_of_birth.isoformat() if s.date_of_birth else None,
+                "date_of_joining": s.date_of_joining.isoformat() if s.date_of_joining else None,
+                "phone": s.phone,
+                "email": s.email,
+                "remarks": s.remarks,
+                "extra": s.extra or {},
+                "photo_url": photo_url,
+            }
+
+        field_defs = crud_defs.list_field_defs(db)
+        return {
+            "count": len(rows),
+            "items": [_staff_to_card_dict(r) for r in rows],
+            "field_defs": [
+                {
+                    "id": f.id,
+                    "name": f.name,
+                    "label": f.label,
+                    "data_type": f.data_type,
+                    "sort_order": f.sort_order,
+                    "required": f.required,
+                }
+                for f in field_defs
+            ],
+            "filters": {
+                "q": args.get("q"),
+                "district": args.get("district"),
+                "designation": args.get("designation"),
+                "facility_name": args.get("facility_name"),
+                "employment_type": args.get("employment_type"),
+                "limit": limit,
+            },
+        }
+
+    def _tool_export_staff(args: dict) -> dict:
+        fmt = str(args.get("format", "xlsx") or "xlsx").lower()
+        if fmt not in {"csv", "xlsx"}:
+            fmt = "xlsx"
+        base_url = str(request.base_url).rstrip("/") if request else ""
+        qs_parts = [f"format={fmt}"]
+        for key in ["q", "district", "designation", "facility_name", "employment_type"]:
+            val = args.get(key)
+            if val:
+                qs_parts.append(f"{key}={val}")
+        qs_str = "&".join(qs_parts)
+        download_url = f"{base_url}/api/hr/staff/export?{qs_str}"
+        return {
+            "status": "ready",
+            "format": fmt,
+            "download_url": download_url,
+        }
+
+    def _tool_navigate_page(args: dict) -> dict:
+        valid_pages = {
+            "dashboard-home", "staff-list", "add-staff",
+            "edit-staff", "id-cards", "attachments",
+        }
+        page = str(args.get("page", "") or "").strip()
+        if page not in valid_pages:
+            return {"error": f"Unknown page: {page}. Valid: {', '.join(sorted(valid_pages))}"}
+        return {"status": "navigated", "page": page}
 
     def _tool_get_staff(args: dict) -> dict:
         staff_id = int(args.get("staff_id", 0) or 0)
@@ -411,9 +504,12 @@ def chat_endpoint(prompt: dict, db: Session = Depends(get_db)):
         "delete_staff": _tool_delete_staff,
         "dashboard_summary": _tool_dashboard_summary,
         "list_field_defs": _tool_list_field_defs,
+        "bulk_id_cards": _tool_bulk_id_cards,
         "create_field_def": _tool_create_field_def,
         "update_field_def": _tool_update_field_def,
         "delete_field_def": _tool_delete_field_def,
+        "export_staff": _tool_export_staff,
+        "navigate_page": _tool_navigate_page,
     }
 
     try:
@@ -436,32 +532,25 @@ def chat_endpoint(prompt: dict, db: Session = Depends(get_db)):
         # ── Agent mode: full tool access, no write gating ──
         system_instruction = (
             "You are an HR data assistant for a Medical Office Portal. "
-            "You have FULL read and write access to the system. "
-            "When the user asks you to create, update, or delete fields or records, do it immediately — "
-            "do NOT ask for extra permissions or confirmations.\n\n"
-            "STAFF RECORD RULES:\n"
-            "- You can create, update, or delete staff records.\n"
-            "- To find duplicates, you can use list_staff to search by name or other fields.\n"
-            "- If instructed to merge or remove duplicates, use delete_staff for the duplicates.\n\n"
-            "FIELD CREATION RULES:\n"
-            "- data_type accepts ANY string value. Common examples: string, text, date, integer, number, email, phone, boolean, varchar. "
-            "Accept whatever the user specifies — do NOT reject or restrict data types.\n"
-            "- name should be lowercase_snake_case (e.g. 'home_address').\n"
-            "- label should be Title Case (e.g. 'Home Address').\n"
-            "- If the user says 'add field after X', use insert_after with X's name or label.\n"
-            "- If the user says 'add field as first', use position='first'.\n"
-            "- If the user doesn't specify position, the field is added at the end by default.\n"
-            "- When creating a field, first call list_field_defs to see existing fields and their sort_order, "
-            "then call create_field_def with the correct insert_after or position.\n\n"
-            "IMPORTANT: Do NOT hallucinate restrictions that don't exist. "
-            "If the user gives you all necessary info (name, data_type), proceed to create immediately. "
-            "Do NOT loop asking for the same information repeatedly."
+            "You have FULL read and write access. Do EVERYTHING a user/admin can do. "
+            "Do NOT ask for confirmations.\n\n"
+            "=== CAPABILITIES ===\n"
+            "1. STAFF: list_staff, get_staff, create_staff, update_staff, delete_staff\n"
+            "2. ID CARDS: bulk_id_cards (UI automatically renders & zips). Use when asked to generate cards.\n"
+            "3. EXPORT: export_staff(format='xlsx' or 'csv')\n"
+            "4. FIELDS: list_field_defs, create_field_def, update_field_def, delete_field_def\n"
+            "5. NAVIGATION: navigate_page to dashboard-home, staff-list, add-staff, id-cards\n"
+            "6. DASHBOARD: dashboard_summary\n\n"
+            "=== RULES ===\n"
+            "- Act immediately.\n"
+            "- If user says 'make ID cards for everyone', call bulk_id_cards.\n"
+            "- If user says 'export data', call export_staff.\n"
         )
 
         tool_decls = [
             {
                 "name": "list_staff",
-                "description": "Search and list staff records with optional filters.",
+                "description": "Search staff records.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -544,22 +633,60 @@ def chat_endpoint(prompt: dict, db: Session = Depends(get_db)):
                 },
             },
             {
-                "name": "create_field_def",
-                "description": (
-                    "Create a new custom HR field definition. "
-                    "data_type can be any string (e.g. string, text, date, integer, number, email, phone, boolean, varchar). "
-                    "Use insert_after to place after a specific field name/label, or position='first' to place at the beginning. "
-                    "If neither is specified, the field is added at the end."
-                ),
+                "name": "bulk_id_cards",
+                "description": "Generate ID cards in bulk. Returns data for the UI to render and zip.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "name": {"type": "string", "description": "Machine name, lowercase_snake_case"},
-                        "label": {"type": "string", "description": "Human-readable label in Title Case"},
-                        "data_type": {"type": "string", "description": "Any data type string: string, text, date, integer, number, email, phone, boolean, varchar, etc."},
+                        "q": {"type": "string"},
+                        "district": {"type": "string"},
+                        "designation": {"type": "string"},
+                        "facility_name": {"type": "string"},
+                        "employment_type": {"type": "string"},
+                        "limit": {"type": "number"},
+                    },
+                },
+            },
+            {
+                "name": "export_staff",
+                "description": "Export staff records as an Excel (.xlsx) or CSV file.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "format": {"type": "string"},
+                        "q": {"type": "string"},
+                        "district": {"type": "string"},
+                        "designation": {"type": "string"},
+                        "facility_name": {"type": "string"},
+                        "employment_type": {"type": "string"},
+                    },
+                },
+            },
+            {
+                "name": "navigate_page",
+                "description": "Navigate to a specific page in the portal UI: dashboard-home, staff-list, add-staff, id-cards.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "page": {
+                            "type": "string",
+                        },
+                    },
+                    "required": ["page"],
+                },
+            },
+            {
+                "name": "create_field_def",
+                "description": "Create a new custom HR field definition.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "label": {"type": "string"},
+                        "data_type": {"type": "string"},
                         "required": {"type": "boolean"},
-                        "insert_after": {"type": "string", "description": "Name or label of existing field to insert after"},
-                        "position": {"type": "string", "description": "Use 'first' to place at the beginning"},
+                        "insert_after": {"type": "string"},
+                        "position": {"type": "string"},
                     },
                     "required": ["name", "label", "data_type"],
                 },

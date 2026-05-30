@@ -1,9 +1,11 @@
 /**
  * Chat Assistant Module
- * Handles the import assistant chat panel with file upload and API communication
+ * Handles the import assistant chat panel with file upload and API communication.
+ * Enhanced agent mode supports all portal actions: CRUD, bulk ID cards, exports, navigation.
  */
 
 import * as api from './api.js';
+import { generateIdCardsZip } from './id_cards.js';
 
 // DOM references
 const chatPanel = document.getElementById('chat-panel');
@@ -22,7 +24,7 @@ const CHAT_STORE_KEY = 'import_assistant_chat_store_v1';
 const LEGACY_STORAGE_KEY = 'import_assistant_chat_v1';
 const MODE_STORAGE_KEY = 'import_assistant_chat_mode_v1';
 const DEFAULT_THREAD_TITLE = 'New chat';
-const WELCOME_TEXT = "👋 Hi! I'm your import assistant. Upload a CSV or XLSX file to get started.";
+const WELCOME_TEXT = "👋 Hi! I'm your DMO Office AI assistant. Upload a CSV or XLSX file to get started.";
 
 // Chat state
 let currentFile = null;
@@ -143,7 +145,7 @@ function storeMessages(items) {
   saveChatStore(store);
 }
 
-function persistMessage(text, isUser) {
+function persistMessage(text, isUser, opts = {}) {
   const store = loadChatStore();
   const convo = getActiveConversation(store);
   const items = Array.isArray(convo.messages) ? convo.messages : [];
@@ -151,6 +153,7 @@ function persistMessage(text, isUser) {
     text: text ?? '',
     isUser: !!isUser,
     ts: Date.now(),
+    html: opts.html || null,
   });
   convo.messages = items.slice(-200);
 
@@ -174,7 +177,7 @@ function restoreMessages() {
 
   chatMessages.innerHTML = '';
   stored.forEach((m) => {
-    addMessage(m.text, !!m.isUser, { persist: false });
+    addMessage(m.text, !!m.isUser, { persist: false, html: m.html || null });
   });
   return true;
 }
@@ -329,6 +332,9 @@ export function initChat() {
     if (chatPanel.contains(target) || chatToggle.contains(target)) return;
     closeChat();
   });
+
+  // Listen for download button clicks (delegated)
+  chatMessages.addEventListener('click', handleChatActionClick);
 }
 
 /**
@@ -356,7 +362,12 @@ function addMessage(text, isUser = false, opts = {}) {
   const bubble = document.createElement('div');
   bubble.className = 'message-bubble';
   
-  bubble.innerHTML = `<p>${renderMarkdownSafe(text)}</p>`;
+  if (opts.html) {
+    bubble.innerHTML = opts.html;
+  } else {
+    bubble.innerHTML = `<p>${renderMarkdownSafe(text)}</p>`;
+  }
+
   messageEl.appendChild(bubble);
   chatMessages.appendChild(messageEl);
   
@@ -364,8 +375,15 @@ function addMessage(text, isUser = false, opts = {}) {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 
   if (opts.persist !== false) {
-    persistMessage(text, isUser);
+    persistMessage(text, isUser, { html: opts.html || null });
   }
+}
+
+/**
+ * Add a rich HTML message (not persisted as HTML to storage, only text)
+ */
+function addRichMessage(text, html) {
+  addMessage(text, false, { html });
 }
 
 /**
@@ -490,6 +508,9 @@ async function importParsedFile() {
  * Send message to chat API
  */
 async function sendChatMessage() {
+  // Show typing indicator
+  const typingId = showTypingIndicator();
+
   try {
     const mode = chatModeSelect?.value || getChatMode();
     const messages = getConversationMessages();
@@ -505,15 +526,331 @@ async function sendChatMessage() {
       }),
     });
 
+    removeTypingIndicator(typingId);
+
     if (!response.ok) {
       throw new Error(`Chat error: ${response.statusText}`);
     }
 
     const data = await response.json();
     const reply = data.reply || 'No response from assistant.';
+    const actions = data.actions || [];
+
+    // Show the text reply
     addMessage(reply);
 
+    // Process agent actions for client-side execution
+    if (mode === 'agent' && actions.length > 0) {
+      await processAgentActions(actions);
+    }
+
   } catch (error) {
+    removeTypingIndicator(typingId);
     addMessage(`⚠️ Assistant unavailable: ${error.message}`);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// Agent Action Processing
+// ═══════════════════════════════════════════════════════
+
+/**
+ * Process agent tool call results and trigger client-side actions
+ */
+async function processAgentActions(actions) {
+  for (const action of actions) {
+    const { tool, args, result } = action;
+
+    switch (tool) {
+      case 'bulk_id_cards':
+        await handleBulkIdCards(result, args);
+        break;
+
+      case 'export_staff':
+        handleExportStaff(result, args);
+        break;
+
+      case 'navigate_page':
+        handleNavigatePage(result, args);
+        break;
+
+      case 'create_staff':
+        if (result?.status === 'created') {
+          showActionSummary('✅ Created', `Staff record #${result.id} — ${result.full_name}`, 'success');
+        }
+        break;
+
+      case 'update_staff':
+        if (result?.status === 'updated') {
+          showActionSummary('✏️ Updated', `Staff record #${result.id} — ${result.full_name}`, 'info');
+        }
+        break;
+
+      case 'delete_staff':
+        if (result?.status === 'deleted') {
+          showActionSummary('🗑 Deleted', `Staff record #${result.id} removed`, 'warning');
+        }
+        break;
+
+      case 'create_field_def':
+        if (result?.status === 'created') {
+          showActionSummary('✅ Field Created', `"${result.label}" (${result.data_type})`, 'success');
+        }
+        break;
+
+      case 'update_field_def':
+        if (result?.status === 'updated') {
+          showActionSummary('✏️ Field Updated', `"${result.label}"`, 'info');
+        }
+        break;
+
+      case 'delete_field_def':
+        if (result?.status === 'deleted') {
+          showActionSummary('🗑 Field Deleted', `Field #${result.id} removed`, 'warning');
+        }
+        break;
+
+      default:
+        // Other tool calls are handled by the text reply
+        break;
+    }
+  }
+}
+
+/**
+ * Handle bulk ID card generation client-side
+ */
+async function handleBulkIdCards(result, _args) {
+  if (!result || !result.items || result.items.length === 0) {
+    addMessage('⚠️ No staff records found to generate ID cards for.');
+    return;
+  }
+
+  const count = result.items.length;
+  const fieldDefs = result.field_defs || [];
+
+  // Show progress message
+  const progressEl = addProgressMessage(
+    `🪪 Generating ${count} ID card${count !== 1 ? 's' : ''}...`,
+    count
+  );
+
+  try {
+    // Use the existing generateIdCardsZip from id_cards.js
+    const { blob, count: created, skipped } = await generateIdCardsZip(
+      result.items,
+      fieldDefs,
+      {
+        scale: 3,
+        onProgress: (done) => {
+          updateProgress(progressEl, done, count);
+        },
+      }
+    );
+
+    // Remove progress
+    if (progressEl) progressEl.remove();
+
+    if (!blob) {
+      addMessage('❌ Failed to generate ID cards. No cards could be rendered.');
+      return;
+    }
+
+    // Create downloadable URL
+    const url = URL.createObjectURL(blob);
+    const sizeMB = (blob.size / (1024 * 1024)).toFixed(1);
+
+    // Store for later download
+    const downloadId = `dl_${Date.now()}`;
+    window.__chatDownloads = window.__chatDownloads || {};
+    window.__chatDownloads[downloadId] = { url, filename: `ID_Cards_${new Date().toISOString().slice(0, 10)}.zip` };
+
+    // Show download popup with rich HTML
+    const html = `
+      <div class="chat-action-card chat-action-success">
+        <div class="chat-action-icon">🪪</div>
+        <div class="chat-action-body">
+          <div class="chat-action-title">ID Cards Ready!</div>
+          <div class="chat-action-detail">
+            Generated <strong>${created}</strong> ID card${created !== 1 ? 's' : ''}${skipped > 0 ? ` (${skipped} skipped)` : ''} • ${sizeMB} MB
+          </div>
+          <button class="chat-download-btn" data-download-id="${downloadId}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download ZIP
+          </button>
+        </div>
+      </div>
+    `;
+
+    addRichMessage(
+      `✅ ID Cards Ready! Generated ${created} card${created !== 1 ? 's' : ''}. Click the download button below.`,
+      html
+    );
+  } catch (err) {
+    if (progressEl) progressEl.remove();
+    console.error('Bulk ID card generation failed:', err);
+    addMessage(`❌ ID card generation failed: ${err.message}`);
+  }
+}
+
+/**
+ * Handle staff export action
+ */
+function handleExportStaff(result, args) {
+  const format = args?.format || result?.format || 'xlsx';
+  const url = result?.download_url;
+
+  if (url) {
+    const html = `
+      <div class="chat-action-card chat-action-success">
+        <div class="chat-action-icon">📊</div>
+        <div class="chat-action-body">
+          <div class="chat-action-title">Export Ready!</div>
+          <div class="chat-action-detail">
+            Staff data exported as <strong>${format.toUpperCase()}</strong>
+          </div>
+          <a href="${escapeHtml(url)}" class="chat-download-btn" download>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download ${format.toUpperCase()}
+          </a>
+        </div>
+      </div>
+    `;
+    addRichMessage(`📊 Export ready! Download your ${format.toUpperCase()} file.`, html);
+  } else {
+    // Fallback: direct browser navigation
+    window.location.href = `/api/hr/staff/export?format=${encodeURIComponent(format)}`;
+    addMessage(`📊 Downloading ${format.toUpperCase()} export...`);
+  }
+}
+
+/**
+ * Handle page navigation
+ */
+function handleNavigatePage(result, args) {
+  const page = args?.page || result?.page;
+  if (page && typeof window._navigateTo === 'function') {
+    const params = args?.params || {};
+    window._navigateTo(page, params);
+    addMessage(`📍 Navigated to ${page.replace(/-/g, ' ')}.`);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// UI Helpers
+// ═══════════════════════════════════════════════════════
+
+/**
+ * Show a compact action summary in the chat
+ */
+function showActionSummary(title, detail, type = 'info') {
+  const colorMap = {
+    success: '#10B981',
+    info: '#6366F1',
+    warning: '#F59E0B',
+    error: '#EF4444',
+  };
+  const color = colorMap[type] || colorMap.info;
+
+  const html = `
+    <div class="chat-action-pill" style="border-left: 3px solid ${color};">
+      <strong>${escapeHtml(title)}</strong>
+      <span>${escapeHtml(detail)}</span>
+    </div>
+  `;
+  addRichMessage(`${title} — ${detail}`, html);
+}
+
+/**
+ * Show typing indicator
+ */
+function showTypingIndicator() {
+  const id = `typing_${Date.now()}`;
+  const el = document.createElement('div');
+  el.className = 'chat-message system';
+  el.id = id;
+  el.innerHTML = `
+    <div class="message-bubble">
+      <div class="chat-typing">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+  `;
+  chatMessages.appendChild(el);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  return id;
+}
+
+/**
+ * Remove typing indicator
+ */
+function removeTypingIndicator(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+/**
+ * Show progress message
+ */
+function addProgressMessage(text, total) {
+  const el = document.createElement('div');
+  el.className = 'chat-message system';
+  el.innerHTML = `
+    <div class="message-bubble">
+      <div class="chat-progress-wrapper">
+        <p>${renderMarkdownSafe(text)}</p>
+        <div class="chat-progress-bar">
+          <div class="chat-progress-fill" style="width: 0%"></div>
+        </div>
+        <span class="chat-progress-label">0 / ${total}</span>
+      </div>
+    </div>
+  `;
+  chatMessages.appendChild(el);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  return el;
+}
+
+/**
+ * Update progress bar
+ */
+function updateProgress(el, done, total) {
+  if (!el) return;
+  const fill = el.querySelector('.chat-progress-fill');
+  const label = el.querySelector('.chat-progress-label');
+  if (fill) fill.style.width = `${Math.round((done / total) * 100)}%`;
+  if (label) label.textContent = `${done} / ${total}`;
+}
+
+/**
+ * Handle clicks on action buttons inside chat messages
+ */
+function handleChatActionClick(e) {
+  // Download button
+  const downloadBtn = e.target.closest('[data-download-id]');
+  if (downloadBtn) {
+    e.preventDefault();
+    const dlId = downloadBtn.dataset.downloadId;
+    const dl = window.__chatDownloads?.[dlId];
+    if (dl) {
+      const a = document.createElement('a');
+      a.href = dl.url;
+      a.download = dl.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+    return;
+  }
+
+  // Navigate button
+  const navBtn = e.target.closest('[data-navigate-page]');
+  if (navBtn) {
+    e.preventDefault();
+    const page = navBtn.dataset.navigatePage;
+    if (page && typeof window._navigateTo === 'function') {
+      window._navigateTo(page);
+    }
+    return;
   }
 }

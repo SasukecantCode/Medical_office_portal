@@ -377,6 +377,94 @@ textarea.form-input {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* ── Export dropdown ── */
+.export-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.export-dropdown [data-export-trigger] {
+  gap: 8px;
+}
+
+.export-chevron {
+  transition: transform 0.3s var(--ease-spring);
+  opacity: 0.75;
+}
+
+.export-dropdown.open .export-chevron {
+  transform: rotate(180deg);
+}
+
+.export-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 220px;
+  background: rgba(10, 17, 24, 0.92);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  padding: 6px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px) scale(0.96);
+  transition:
+    opacity 0.3s var(--ease-spring),
+    transform 0.3s var(--ease-spring),
+    visibility 0.3s;
+  z-index: var(--z-dropdown);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.export-dropdown.open .export-dropdown-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+}
+
+.export-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: var(--text-sm);
+  text-align: left;
+  transition:
+    background 0.25s var(--ease-smooth),
+    transform 0.25s var(--ease-spring);
+}
+
+.export-dropdown-item:hover {
+  background: rgba(198, 151, 63, 0.12);
+  color: var(--clr-accent-light);
+  transform: translateX(3px);
+}
+
+.export-dropdown-item strong {
+  display: block;
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+
+.export-dropdown-item small {
+  display: block;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 2px;
+}
+
+.export-dropdown-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
 /* ── Toast notifications ── */
 .toast-container {
   position: fixed;

@@ -3,7 +3,7 @@
    ═══════════════════════════════════════════════════════ */
 
 import { api } from './api.js';
-import { animateCounter, showToast, initProgressBars } from './animations.js';
+import { animateCounter, showToast, initProgressBars, initExportDropdown } from './animations.js';
 import { staffAvatarHtml } from './staff.js';
 
 export async function renderDashboardHome(container) {
@@ -24,10 +24,29 @@ export async function renderDashboardHome(container) {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
           <span>01 Jan - ${dateString}</span>
         </div>
-        <button class="btn btn-primary btn-sm" id="btn-export-dash">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> 
-          Export Data
-        </button>
+        <div class="export-dropdown" id="export-dropdown-dash">
+          <button type="button" class="btn btn-primary btn-sm" data-export-trigger aria-haspopup="true" aria-expanded="false">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Export Data
+            <svg class="export-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="export-dropdown-menu" role="menu">
+            <button type="button" class="export-dropdown-item" data-export-format="xlsx" role="menuitem">
+              <span class="export-dropdown-icon">📊</span>
+              <span>
+                <strong>Export Excel</strong>
+                <small>.xlsx with photos</small>
+              </span>
+            </button>
+            <button type="button" class="export-dropdown-item" data-export-format="csv" role="menuitem">
+              <span class="export-dropdown-icon">📄</span>
+              <span>
+                <strong>Export CSV</strong>
+                <small>Comma-separated values</small>
+              </span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -163,8 +182,12 @@ export async function renderDashboardHome(container) {
     </div>
   `;
 
-  // Add click handlers for buttons
-  document.getElementById('btn-export-dash')?.addEventListener('click', () => api.exportStaff('xlsx'));
+  // Export dropdown
+  const exportRoot = document.getElementById('export-dropdown-dash');
+  if (exportRoot) {
+    initExportDropdown(exportRoot, (format) => api.exportStaff(format));
+  }
+
   document.getElementById('btn-view-all')?.addEventListener('click', () => window._navigateTo('staff-list'));
 
   try {

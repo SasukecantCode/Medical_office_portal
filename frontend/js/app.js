@@ -2,7 +2,7 @@
    App — Main SPA Router & Init
    ═══════════════════════════════════════════════════════ */
 
-import { initLanding } from './landing.js';
+import { initLanding, restartLandingScroll } from './landing.js';
 import { renderDashboardHome } from './dashboard.js';
 import { renderStaffList, renderStaffForm, renderAttachments } from './staff.js';
 import { renderIdCardsPage } from './id_cards.js';
@@ -69,6 +69,14 @@ window._navigateTo = function navigateTo(pageKey, params = {}) {
     link.classList.toggle('active', link.dataset.page === pageKey);
   });
 
+  // Slide active indicator
+  const activeLink = document.querySelector('.sidebar-link.active');
+  if (activeLink) {
+    activeLink.classList.remove('sidebar-link-pulse');
+    void activeLink.offsetWidth;
+    activeLink.classList.add('sidebar-link-pulse');
+  }
+
   mainBody.classList.remove('page-enter');
   mainBody.classList.add('page-exit');
 
@@ -83,6 +91,7 @@ window._navigateTo = function navigateTo(pageKey, params = {}) {
 };
 
 function showDashboard() {
+  window.dispatchEvent(new Event('landing-scroll-destroy'));
   landingView.style.transition = 'opacity 0.6s var(--ease-smooth)';
   landingView.style.opacity = '0';
 
@@ -106,6 +115,7 @@ function showLanding() {
     landingView.style.opacity = '1';
   });
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  setTimeout(() => restartLandingScroll(), 400);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -122,31 +132,60 @@ document.addEventListener('DOMContentLoaded', () => {
     initLanding(showDashboard);
   }
 
+  function setSidebarOpen(isOpen) {
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.querySelector('.sidebar-overlay');
+    const toggle = document.getElementById('sidebar-toggle');
+
+    sidebar?.classList.toggle('open', isOpen);
+    overlay?.classList.toggle('open', isOpen);
+    toggle?.classList.toggle('open', isOpen);
+    document.body.classList.toggle('sidebar-open', isOpen);
+
+    if (toggle) {
+      toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      toggle.setAttribute('aria-label', isOpen ? 'Close navigation menu' : 'Open navigation menu');
+    }
+    if (overlay) overlay.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+  }
+
   document.querySelectorAll('.sidebar-link').forEach((link) => {
     link.addEventListener('click', () => {
       const page = link.dataset.page;
       if (page) window._navigateTo(page);
-      document.querySelector('.sidebar')?.classList.remove('open');
-      document.querySelector('.sidebar-overlay')?.classList.remove('open');
+      setSidebarOpen(false);
     });
   });
 
   document.getElementById('logout-btn')?.addEventListener('click', showLanding);
 
   document.getElementById('sidebar-toggle')?.addEventListener('click', () => {
-    document.querySelector('.sidebar')?.classList.toggle('open');
-    document.querySelector('.sidebar-overlay')?.classList.toggle('open');
+    const isOpen = !document.querySelector('.sidebar')?.classList.contains('open');
+    setSidebarOpen(isOpen);
   });
 
   document.querySelector('.sidebar-overlay')?.addEventListener('click', () => {
-    document.querySelector('.sidebar')?.classList.remove('open');
-    document.querySelector('.sidebar-overlay')?.classList.remove('open');
+    setSidebarOpen(false);
   });
 
-  document.getElementById('export-xlsx')?.addEventListener('click', () => api.exportStaff('xlsx'));
-  document.getElementById('export-csv')?.addEventListener('click', () => api.exportStaff('csv'));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.querySelector('.sidebar')?.classList.contains('open')) {
+      setSidebarOpen(false);
+    }
+  });
 
-  api.health().catch(() => {
+  async function waitForBackend() {
+    await new Promise((r) => setTimeout(r, 1000));
+    for (let attempt = 0; attempt < 6; attempt++) {
+      try {
+        await api.health();
+        return;
+      } catch {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
     showToast('Backend not reachable. Ensure it\'s running on port 8000.', 'error', 8000);
-  });
+  }
+
+  waitForBackend();
 });

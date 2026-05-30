@@ -7,7 +7,7 @@
   background: white;
   position: relative;
   overflow: hidden;
-  font-family: Arial, sans-serif;
+  font-family: var(--font-body);
   color: #002b80;
   box-sizing: border-box;
   margin-bottom: 20px;
@@ -236,15 +236,24 @@
 
 .idc-line {
   flex: 1;
-  border-bottom: 1px solid #002b80;
   min-height: 9px;
   font-size: 8px;
   font-weight: normal;
   text-transform: uppercase;
-  padding-bottom: 1px;
-  line-height: 1.1;
+  line-height: 1.2;
   word-break: break-word;
   overflow-wrap: anywhere;
+  display: block;
+  box-sizing: border-box;
+  padding-bottom: 0;
+}
+
+.idc-line::after {
+  content: '';
+  display: block;
+  width: 100%;
+  margin-top: 2px;
+  border-bottom: 1px solid #002b80;
 }
 
 .idc-section-title {
@@ -270,6 +279,10 @@
 
 .idc-custom-grid .idc-line {
   min-height: 7px;
+}
+
+.idc-custom-grid .idc-line::after {
+  margin-top: 1px;
 }
 
 .id-card-flip-wrapper {

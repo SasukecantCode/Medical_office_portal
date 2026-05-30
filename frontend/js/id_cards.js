@@ -654,6 +654,73 @@ function printIdCard() {
 window.printIdCard = printIdCard;
 
 import html2canvas from 'html2canvas';
+import JSZip from 'jszip';
+
+/** Styles for off-screen html2canvas capture (print uses native layout). */
+function getIdCardExportStyles() {
+  return `
+    .html2canvas-wrapper .idc-card {
+      width: 86mm !important;
+      height: 54mm !important;
+      border: 2px solid #002b80 !important;
+      border-radius: 4px !important;
+      box-sizing: border-box !important;
+      background: white !important;
+      position: relative !important;
+      overflow: hidden !important;
+      font-family: Arial, sans-serif !important;
+      color: #002b80 !important;
+      padding: 2px !important;
+      box-shadow: none !important;
+      margin: 0 !important;
+    }
+    .html2canvas-wrapper .idc-vertical-text span {
+      width: 50mm !important;
+    }
+    .html2canvas-wrapper .idc-field {
+      align-items: flex-end !important;
+    }
+    .html2canvas-wrapper .idc-line {
+      display: block !important;
+      border-bottom: none !important;
+      padding-bottom: 0 !important;
+      line-height: 1.2 !important;
+      min-height: 9px !important;
+    }
+    .html2canvas-wrapper .idc-line::after {
+      content: '' !important;
+      display: block !important;
+      width: 100% !important;
+      margin-top: 2px !important;
+      border-bottom: 1px solid #002b80 !important;
+    }
+    .html2canvas-wrapper .idc-custom-grid .idc-line::after {
+      margin-top: 1px !important;
+    }
+  `;
+}
+
+function buildIdCardExportMarkup(frontHtml, backHtml) {
+  return `
+    <style>${getIdCardExportStyles()}</style>
+    <div class="print-wrapper html2canvas-wrapper" style="padding: 10px; background: white;">
+      ${frontHtml}
+    </div>
+    <div class="print-wrapper html2canvas-wrapper" style="padding: 10px; background: white;">
+      ${backHtml}
+    </div>
+  `;
+}
+
+async function captureIdCardImage(container, scale = 3) {
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  return html2canvas(container, {
+    scale,
+    useCORS: true,
+    backgroundColor: '#ffffff',
+    logging: false,
+  });
+}
 
 window.downloadIdCardJpeg = async function() {
   const draft = window.__idcard_draft || window.__medical_last_idcard_staff;
@@ -675,43 +742,12 @@ window.downloadIdCardJpeg = async function() {
   container.style.flexDirection = 'column';
   container.style.gap = '20px';
   
-  container.innerHTML = `
-    <style>
-      .html2canvas-wrapper .idc-card {
-        width: 86mm !important;
-        height: 54mm !important;
-        border: 2px solid #002b80 !important;
-        border-radius: 4px !important;
-        box-sizing: border-box !important;
-        background: white !important;
-        position: relative !important;
-        overflow: hidden !important;
-        font-family: Arial, sans-serif !important;
-        color: #002b80 !important;
-        padding: 2px !important;
-        box-shadow: none !important;
-        margin: 0 !important;
-      }
-      .html2canvas-wrapper .idc-vertical-text span {
-        width: 50mm !important;
-      }
-    </style>
-    <div class="print-wrapper html2canvas-wrapper" style="padding: 10px; background: white;">
-      ${frontHtml}
-    </div>
-    <div class="print-wrapper html2canvas-wrapper" style="padding: 10px; background: white;">
-      ${backHtml}
-    </div>
-  `;
+  container.innerHTML = buildIdCardExportMarkup(frontHtml, backHtml);
   
   document.body.appendChild(container);
   
   try {
-    const canvas = await html2canvas(container, {
-      scale: 3, 
-      useCORS: true,
-      backgroundColor: '#ffffff'
-    });
+    const canvas = await captureIdCardImage(container, 3);
     
     const url = canvas.toDataURL('image/jpeg', 0.95);
     const a = document.createElement('a');
@@ -727,3 +763,71 @@ window.downloadIdCardJpeg = async function() {
     container.remove();
   }
 };
+
+function normalizeFileName(name) {
+  return String(name || 'idcard')
+    .replace(/[^A-Za-z0-9_\- ]+/g, '')
+    .trim()
+    .replace(/\s+/g, '_')
+    .slice(0, 80) || 'idcard';
+}
+
+export async function generateIdCardsZip(staffList, fieldDefs = [], opts = {}) {
+  const items = Array.isArray(staffList) ? staffList : [];
+  const scale = Number.isFinite(opts.scale) ? opts.scale : 3;
+  if (!items.length) {
+    return { blob: null, count: 0, skipped: 0 };
+  }
+
+  const zip = new JSZip();
+  const container = document.createElement('div');
+  container.style.position = 'absolute';
+  container.style.left = '-9999px';
+  container.style.top = '0';
+  container.style.background = 'white';
+  container.style.padding = '20px';
+  container.style.display = 'flex';
+  container.style.flexDirection = 'column';
+  container.style.gap = '20px';
+
+  document.body.appendChild(container);
+
+  let created = 0;
+  let skipped = 0;
+
+  try {
+    for (const staff of items) {
+      if (!staff || !staff.full_name) {
+        skipped += 1;
+        continue;
+      }
+
+      const frontHtml = generateIdCardFront(staff);
+      const backHtml = generateIdCardBack(staff, fieldDefs);
+
+      container.innerHTML = buildIdCardExportMarkup(frontHtml, backHtml);
+
+      const canvas = await captureIdCardImage(container, scale);
+
+      const blob = await new Promise((resolve) => {
+        canvas.toBlob(resolve, 'image/jpeg', 0.95);
+      });
+
+      if (!blob) {
+        skipped += 1;
+        continue;
+      }
+
+      const buffer = await blob.arrayBuffer();
+      const safeName = normalizeFileName(staff.full_name || `staff_${staff.id || created + 1}`);
+      const suffix = staff.id ? `_${staff.id}` : '';
+      zip.file(`${safeName}${suffix}_IDCard.jpg`, buffer);
+      created += 1;
+    }
+
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    return { blob: zipBlob, count: created, skipped };
+  } finally {
+    container.remove();
+  }
+}
