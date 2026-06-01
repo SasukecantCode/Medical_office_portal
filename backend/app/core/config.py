@@ -33,6 +33,26 @@ class Settings(BaseSettings):
     # Public base URL for export links (falls back to request host)
     public_base_url: str | None = None
 
+    # Authentication / registration
+    registration_access_code: str = "namsai123"
+    auth_jwt_secret_key: str = "change-me-in-production"
+    auth_jwt_algorithm: str = "HS256"
+    auth_jwt_expiry_minutes: int = 720
+    auth_otp_length: int = 6
+    auth_otp_expiry_minutes: int = 10
+
+    # SMTP email delivery for OTPs
+    auth_smtp_host: str | None = None
+    auth_smtp_port: int = 587
+    auth_smtp_user: str | None = None
+    auth_smtp_password: str | None = None
+    auth_smtp_from_email: str | None = None
+    auth_smtp_use_tls: bool = True
+    auth_smtp_timeout_seconds: int = 20
+
+    # Master admin defaults / portal access control
+    allow_vaccination_portal: bool = False
+
     # Gemini / LLM settings (optional)
     gemini_api_key: str | None = None
     gemini_model: str | None = "models/gemini-2.5-flash"

@@ -45,70 +45,16 @@ def delete_field(field_id: int, db: Session = Depends(get_db)):
     return {"status": "deleted"}
 
 
-def _parse_spreadsheet(data: bytes, filename: str) -> dict:
-    filename = filename.lower()
-    all_rows = []
-    header_keys = []
-    
-    if filename.endswith(".csv"):
-        s = io.StringIO(data.decode("utf-8", errors="ignore"))
-        reader = csv.DictReader(s)
-        header_keys = list(reader.fieldnames or [])
-        for r in reader:
-            all_rows.append(r)
-    else:
-        from openpyxl import load_workbook
-        wb = load_workbook(filename=io.BytesIO(data), read_only=True, data_only=True)
-        for ws in wb.worksheets:
-            rows_iter = ws.iter_rows(values_only=True)
-            header_row = None
-            for r in rows_iter:
-                non_empty = [c for c in r if c is not None and str(c).strip() != ""]
-                if len(non_empty) >= 3:
-                    header_row = [str(c).strip() if c is not None else "" for c in r]
-                    break
-            if header_row:
-                if not header_keys:
-                    header_keys = header_row
-                else:
-                    for h in header_row:
-                        if h not in header_keys:
-                            header_keys.append(h)
-                for r in rows_iter:
-                    if not any(c for c in r if c is not None and str(c).strip() != ""):
-                        continue
-                    obj = {header_row[i]: (r[i] if i < len(r) else "") for i in range(len(header_row))}
-                    all_rows.append(obj)
-                    
-    seen = set()
-    unique_rows = []
-    for r in all_rows:
-        id_val = None
-        for k in r.keys():
-            if k and k.strip().lower() == "id" and r[k]:
-                id_val = str(r[k]).strip()
-                break
-        
-        if id_val:
-            key = f"id_{id_val}"
-        else:
-            name_val = ""
-            for k in r.keys():
-                if k and "name" in k.lower():
-                    name_val = str(r[k]).strip().lower()
-                    break
-            phone_val = ""
-            for k in r.keys():
-                if k and "phone" in k.lower():
-                    phone_val = str(r[k]).strip().lower()
-                    break
-            key = f"name_{name_val}_phone_{phone_val}"
-            
-        if key not in seen:
-            seen.add(key)
-            unique_rows.append(r)
-            
-    return {"headers": header_keys, "rows": unique_rows}
+def _read_csv_headers_and_samples(file_bytes: bytes, max_rows: int = 5) -> dict:
+    s = io.StringIO(file_bytes.decode("utf-8", errors="ignore"))
+    reader = csv.DictReader(s)
+    headers = list(reader.fieldnames or [])
+    samples = []
+    for i, row in enumerate(reader):
+        if i >= max_rows:
+            break
+        samples.append(row)
+    return {"headers": headers, "samples": samples}
 
 
 @router.post("/parse")
@@ -118,26 +64,55 @@ def parse_file(request: Request, file: UploadFile = File(...), db: Session = Dep
     """
     data = file.file.read()
     filename = file.filename or "upload"
-    
-    try:
-        parsed_data = _parse_spreadsheet(data, filename)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Failed to parse file: {exc}")
+    lower = filename.lower()
+    if lower.endswith(".csv"):
+        parsed = _read_csv_headers_and_samples(data)
+    else:
+        try:
+            # openpyxl is optional; provide helpful error if missing
+            from openpyxl import load_workbook
 
-    headers = parsed_data["headers"]
-    samples = parsed_data["rows"][:5]
+            wb = load_workbook(filename=io.BytesIO(data), read_only=True, data_only=True)
+            ws = wb.active
+            if ws is None:
+                raise HTTPException(status_code=400, detail="Workbook has no active worksheet")
+            rows = list(ws.iter_rows(values_only=True))
+            if not rows:
+                headers = []
+                samples = []
+            else:
+                headers = [str(c) if c is not None else "" for c in rows[0]]
+                samples = []
+                for r in rows[1:6]:
+                    samples.append({headers[i] if i < len(headers) else f"col_{i}": (v if v is not None else "") for i, v in enumerate(r)})
+            parsed = {"headers": headers, "samples": samples}
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Failed to parse file: {exc}")
 
     # simple suggestions: map header -> existing field name if direct match
     existing = [f.name for f in crud_defs.list_field_defs(db)]
     core = [
-        "id", "full_name", "gender", "date_of_birth", "designation", "cadre",
-        "employment_type", "phone", "email", "facility_name", "facility_type",
-        "district", "block", "posting_place", "date_of_joining", "remarks",
+        "id",
+        "full_name",
+        "gender",
+        "date_of_birth",
+        "designation",
+        "cadre",
+        "employment_type",
+        "phone",
+        "email",
+        "facility_name",
+        "facility_type",
+        "district",
+        "block",
+        "posting_place",
+        "date_of_joining",
+        "remarks",
     ]
     known = set(existing + core)
 
     suggestions: dict[str, Any] = {}
-    for h in headers:
+    for h in parsed.get("headers", []):
         if not h:
             continue
         key = h.strip()
@@ -147,7 +122,7 @@ def parse_file(request: Request, file: UploadFile = File(...), db: Session = Dep
         else:
             suggestions[key] = None
 
-    return {"filename": filename, "headers": headers, "samples": samples, "suggestions": suggestions}
+    return {"filename": filename, "headers": parsed.get("headers", []), "samples": parsed.get("samples", []), "suggestions": suggestions}
 
 
 @router.post("/import")
@@ -159,20 +134,35 @@ def apply_import(
     """Apply an import: client provides file and a mapping from file headers -> target field names.
     Unmapped fields are stored under `extra` as-is. The `mapping` is expected as a JSON string in form data.
     """
+    # Parse mapping from form field (JSON string)
     try:
         mapping_dict = json.loads(mapping) if mapping else {}
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid mapping JSON")
 
     data = file.file.read()
-    filename = file.filename or "upload"
-    
-    try:
-        parsed_data = _parse_spreadsheet(data, filename)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Failed to parse file: {exc}")
+    filename = (file.filename or "upload").lower()
+    rows: list[dict] = []
+    if filename.endswith(".csv"):
+        s = io.StringIO(data.decode("utf-8", errors="ignore"))
+        reader = csv.DictReader(s)
+        for r in reader:
+            rows.append(r)
+    else:
+        try:
+            from openpyxl import load_workbook
 
-    rows = parsed_data["rows"]
+            wb = load_workbook(filename=io.BytesIO(data), read_only=True, data_only=True)
+            ws = wb.active
+            if ws is None:
+                raise HTTPException(status_code=400, detail="Workbook has no active worksheet")
+            it = ws.iter_rows(values_only=True)
+            headers = [str(c) if c is not None else "" for c in next(it)]
+            for r in it:
+                obj = {headers[i]: (r[i] if i < len(r) else "") for i in range(len(headers))}
+                rows.append(obj)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Failed to parse file: {exc}")
 
     created = 0
     skipped = 0
@@ -182,59 +172,24 @@ def apply_import(
         extra = {}
         for k, v in r.items():
             target = mapping_dict.get(k) if mapping_dict else None
-            
-            # JSON serialization for unmapped extra fields
-            from datetime import date, datetime
-            if isinstance(v, (datetime, date)):
-                v = v.isoformat()
-                
             if target:
-                # Convert Excel datetime/date to isoformat strings for pydantic if necessary,
-                # or let pydantic handle dates. But we must turn empty strings to None for optional fields.
-                is_empty = v is None or (isinstance(v, str) and not v.strip())
-                if is_empty:
-                    if target in ("full_name", "designation", "facility_name", "district"):
-                        payload[target] = "Unknown"
-                    else:
-                        payload[target] = None
-                else:
-                    payload[target] = v
+                payload[target] = v
             else:
                 extra[k] = v
 
         # Attach extra
         payload["extra"] = extra
         try:
-            # Clean fields that might fail validation
-            if "email" in payload and payload["email"]:
-                if isinstance(payload["email"], str) and "@" not in payload["email"]:
-                    payload["email"] = None
-            
-            # Minimal required fields check
-            if payload.get("full_name") == "Unknown" or payload.get("designation") == "Unknown" or payload.get("facility_name") == "Unknown":
+            # Validate minimal required fields
+            if not payload.get("full_name") or not payload.get("designation") or not payload.get("facility_name"):
                 skipped += 1
                 continue
-                
             obj = HRStaffCreate.model_validate(payload)
             staff = crud_staff.create_staff(db, obj)
             created += 1
             out_items.append({"id": staff.id, "full_name": staff.full_name})
-        except Exception as e:
-            db.rollback()
-            # If validation fails, try to aggressively clean optional fields
-            try:
-                for opt_field in ("email", "date_of_birth", "date_of_joining", "phone", "district"):
-                    if opt_field in payload:
-                        payload[opt_field] = None if opt_field != "district" else "Unknown"
-                obj = HRStaffCreate.model_validate(payload)
-                staff = crud_staff.create_staff(db, obj)
-                created += 1
-                out_items.append({"id": staff.id, "full_name": staff.full_name})
-            except Exception as e2:
-                db.rollback()
-                with open("/tmp/import_errors.log", "a") as f:
-                    f.write(f"Row {payload.get('full_name')} error: {repr(e2)}\nPayload: {payload}\n\n")
-                skipped += 1
+        except Exception:
+            skipped += 1
 
     return {"created": created, "skipped": skipped, "items": out_items}
 
@@ -541,17 +496,12 @@ def chat_endpoint(prompt: dict, request: Request, db: Session = Depends(get_db))
             return {"error": f"Staff with id {staff_id} not found"}
         return {"status": "deleted", "id": staff_id}
 
-    def _tool_delete_all_staff(args: dict) -> dict:
-        count = crud_staff.delete_all_staff(db)
-        return {"status": "deleted_all", "count": count}
-
     tools = {
         "list_staff": _tool_list_staff,
         "get_staff": _tool_get_staff,
         "create_staff": _tool_create_staff,
         "update_staff": _tool_update_staff,
         "delete_staff": _tool_delete_staff,
-        "delete_all_staff": _tool_delete_all_staff,
         "dashboard_summary": _tool_dashboard_summary,
         "list_field_defs": _tool_list_field_defs,
         "bulk_id_cards": _tool_bulk_id_cards,
@@ -583,9 +533,9 @@ def chat_endpoint(prompt: dict, request: Request, db: Session = Depends(get_db))
         system_instruction = (
             "You are an HR data assistant for a Medical Office Portal. "
             "You have FULL read and write access. Do EVERYTHING a user/admin can do. "
-            "Do NOT ask for confirmations for normal actions. HOWEVER, if the user asks you to DELETE staff or fields, you MUST ask for their explicit confirmation in the chat before calling the delete tools.\n\n"
+            "Do NOT ask for confirmations.\n\n"
             "=== CAPABILITIES ===\n"
-            "1. STAFF: list_staff, get_staff, create_staff, update_staff, delete_staff, delete_all_staff\n"
+            "1. STAFF: list_staff, get_staff, create_staff, update_staff, delete_staff\n"
             "2. ID CARDS: bulk_id_cards (UI automatically renders & zips). Use when asked to generate cards.\n"
             "3. EXPORT: export_staff(format='xlsx' or 'csv')\n"
             "4. FIELDS: list_field_defs, create_field_def, update_field_def, delete_field_def\n"
@@ -664,14 +614,6 @@ def chat_endpoint(prompt: dict, request: Request, db: Session = Depends(get_db))
                         "staff_id": {"type": "number"},
                     },
                     "required": ["staff_id"],
-                },
-            },
-            {
-                "name": "delete_all_staff",
-                "description": "Delete ALL staff records in the database. Use this carefully.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {},
                 },
             },
             {

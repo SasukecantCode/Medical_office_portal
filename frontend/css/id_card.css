@@ -659,6 +659,32 @@
   }
 }
 
+@media (max-width: 768px) {
+  #id-card-preview-shell {
+    padding: var(--space-md);
+    min-height: auto;
+  }
+
+  .idcard-live-layout {
+    gap: var(--space-md);
+  }
+
+  .idcard-editor-panel,
+  .idcard-preview-panel {
+    border-radius: var(--radius-xl);
+  }
+
+  .idcard-editor-sections {
+    max-height: none;
+    padding: var(--space-md);
+  }
+
+  .idcard-preview-stage {
+    min-height: 260px;
+    padding: var(--space-md) var(--space-sm);
+  }
+}
+
 .autocomplete-dropdown {
   position: absolute;
   top: calc(100% + 8px);

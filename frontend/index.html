@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
   <title>Data Portal — Office of The DMO, Namsai</title>
   <meta name="description" content="Data Portal for managing healthcare staff records. Office of The DMO, Namsai — Government of Arunachal Pradesh." />
 
@@ -16,6 +16,8 @@
   <link rel="icon" href="/assets/logo.png" type="image/png" />
   <link rel="stylesheet" href="/css/id_card.css" />
   <link rel="stylesheet" href="/css/vault.css" />
+  <!-- Mobile responsive overrides (does not affect desktop) -->
+  <link rel="stylesheet" href="/css/mobile.css" />
   <!-- End ID Card CSS -->
 </head>
 <body>
@@ -69,35 +71,90 @@
 
       <div class="login-card">
         <img src="/assets/logo.png" alt="Arunachal Pradesh" class="login-emblem-img" />
-        <h2 class="login-title">Administrator Login</h2>
-        <p class="login-subtitle">Enter your credentials to access the portal</p>
+        <h2 class="login-title" id="auth-title">Portal Access</h2>
+        <p class="login-subtitle" id="auth-subtitle">Sign in or create a role-based profile to continue</p>
 
-        <form class="login-form" id="login-form">
-          <div class="login-field">
-            <label for="login-username">Username</label>
-            <input
-              type="text"
-              id="login-username"
-              class="form-input-dark"
-              placeholder="admin"
-              autocomplete="username"
-            />
-          </div>
-          <div class="login-field">
-            <label for="login-password">Password</label>
-            <input
-              type="password"
-              id="login-password"
-              class="form-input-dark"
-              placeholder="••••••••"
-              autocomplete="current-password"
-            />
-          </div>
-          <button type="submit" class="login-btn" id="login-btn">
-            Sign In
-          </button>
-          <div class="login-error" id="login-error"></div>
-        </form>
+        <div class="auth-tabs" role="tablist" aria-label="Authentication mode">
+          <button type="button" class="auth-tab is-active" data-auth-tab="login" role="tab" aria-selected="true">Sign In</button>
+          <button type="button" class="auth-tab" data-auth-tab="signup" role="tab" aria-selected="false">Sign Up</button>
+        </div>
+
+        <div class="auth-panel is-active" data-auth-panel="login">
+          <form class="login-form" id="login-form">
+            <div class="login-field">
+              <label for="login-role">Role</label>
+              <select id="login-role" class="form-input-dark" autocomplete="off">
+                <option value="hr">HR</option>
+                <option value="vaccination">Vaccination</option>
+                <option value="master">Master</option>
+              </select>
+            </div>
+            <div class="login-field">
+              <label for="login-username">Username</label>
+              <input
+                type="text"
+                id="login-username"
+                class="form-input-dark"
+                placeholder="registered_username"
+                autocomplete="username"
+              />
+            </div>
+            <div class="login-field">
+              <label for="login-password">Password</label>
+              <input
+                type="password"
+                id="login-password"
+                class="form-input-dark"
+                placeholder="••••••••"
+                autocomplete="current-password"
+              />
+            </div>
+            <button type="submit" class="login-btn" id="login-btn">
+              Sign In
+            </button>
+          </form>
+        </div>
+
+        <div class="auth-panel" data-auth-panel="signup">
+          <form class="login-form" id="signup-form">
+            <div class="login-field">
+              <label for="signup-full-name">Full Name</label>
+              <input type="text" id="signup-full-name" class="form-input-dark" placeholder="Your full name" autocomplete="name" />
+            </div>
+            <div class="login-field">
+              <label for="signup-email">Email</label>
+              <input type="email" id="signup-email" class="form-input-dark" placeholder="name@example.com" autocomplete="email" />
+            </div>
+            <div class="login-field">
+              <label for="signup-phone">Phone Number</label>
+              <input type="tel" id="signup-phone" class="form-input-dark" placeholder="Optional" autocomplete="tel" />
+            </div>
+            <div class="login-field">
+              <label for="signup-role">Role</label>
+              <select id="signup-role" class="form-input-dark" autocomplete="off">
+                <option value="hr">HR</option>
+                <option value="vaccination">Vaccination</option>
+              </select>
+            </div>
+            <div class="login-field">
+              <label for="signup-username">Username</label>
+              <input type="text" id="signup-username" class="form-input-dark" placeholder="Choose a username" autocomplete="username" />
+              <div class="field-status" id="signup-username-status"></div>
+            </div>
+            <div class="login-field">
+              <label for="signup-password">Password</label>
+              <input type="password" id="signup-password" class="form-input-dark" placeholder="At least 4 characters" autocomplete="new-password" minlength="4" />
+            </div>
+            <div class="login-field">
+              <label for="signup-invite-token">Admin Invite Key</label>
+              <input type="text" id="signup-invite-token" class="form-input-dark" placeholder="e.g. amber-cloud-delta-mint-48291" autocomplete="off" required />
+            </div>
+            <div class="profile-handle-preview" id="profile-handle-preview">admin.hr.username</div>
+            <button type="submit" class="login-btn" id="signup-btn">Create Account</button>
+          </form>
+        </div>
+
+        <div class="login-error" id="auth-message"></div>
 
         <div class="login-footer">
           Office of The DMO, Namsai<br />
@@ -111,6 +168,9 @@
        DASHBOARD VIEW
        ═══════════════════════════════════════════════════ -->
   <div id="dashboard-view" class="dashboard">
+
+    <!-- Section loading overlay (SPA navigation) -->
+    <div class="page-loading-overlay" id="page-loading-overlay" aria-hidden="true" hidden></div>
 
     <!-- Mobile sidebar toggle — liquid glass -->
     <button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Open navigation menu" aria-expanded="false" aria-controls="main-sidebar">
@@ -148,6 +208,10 @@
         <a class="sidebar-link" data-page="id-cards">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
           ID Cards
+        </a>
+        <a class="sidebar-link sidebar-master-only" data-page="admin-logs" hidden>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          Admin Logs
         </a>
       </nav>
 
@@ -217,7 +281,7 @@
       <header class="main-header">
         <h2 id="page-title">Dashboard</h2>
         <div class="main-header-actions">
-          <span style="font-size: var(--text-xs); color: var(--clr-text-white-60);">Data Portal</span>
+          <span class="header-brand-label" style="font-size: var(--text-xs); color: var(--clr-text-white-60);">Data Portal</span>
         </div>
       </header>
       <div class="main-body" id="main-body">

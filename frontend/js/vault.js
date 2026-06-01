@@ -3,6 +3,7 @@
    ═══════════════════════════════════════════════════════ */
 import { api } from './api.js';
 import { showToast } from './animations.js';
+import { applyStaffPhotoToElement } from './staff.js';
 
 const CATEGORIES = ['Personal', 'Medical', 'Employment', 'Other'];
 
@@ -79,7 +80,6 @@ export async function renderVault(container, staffId, staffName, staffData) {
   const empIdRaw = `EMP${String(staffId).padStart(3, '0')}`;
   const safeName = (staffName || 'Unknown').replace(/[^a-zA-Z0-9_\-\s]/g, '').trim().replace(/\s+/g, '_');
   const empId = `${safeName}_${empIdRaw}`;
-  const photoUrl = staffData?.photo_url || '';
   const initial = (staffName || '?').charAt(0).toUpperCase();
 
   container.innerHTML = `
@@ -93,8 +93,8 @@ export async function renderVault(container, staffId, staffName, staffData) {
       </div>
       <div class="vault-header">
         <div class="vault-header-left">
-          <div class="vault-header-avatar">
-            ${photoUrl ? `<img src="${escA(photoUrl)}" alt="" />` : initial}
+          <div class="vault-header-avatar staff-avatar staff-avatar--pending" style="width:56px;height:56px;">
+            <span class="staff-avatar-initial">${initial}</span>
           </div>
           <div class="vault-header-info">
             <h3>${esc(staffName)}'s Files</h3>
@@ -139,6 +139,11 @@ export async function renderVault(container, staffId, staffName, staffData) {
       <div id="vault-file-list"></div>
     </div>
   `;
+
+  const vaultAvatar = container.querySelector('.vault-header-avatar');
+  if (vaultAvatar) {
+    await applyStaffPhotoToElement(vaultAvatar, { id: staffId, ...staffData });
+  }
 
   // Wire navigation
   document.getElementById('vault-back-btn').addEventListener('click', () => window._navigateTo('staff-list'));
@@ -271,7 +276,20 @@ function openPreviewModal(url, filename) {
     content = `<img src="${escA(url)}" class="preview-media" alt="${escA(filename)}" onload="const l = this.parentElement.querySelector('.vault-preview-loader'); if(l) l.style.display='none'" />`;
     showLoader = true;
   } else if (ext === 'pdf') {
-    content = `<iframe src="${escA(url)}" class="preview-media preview-pdf" onload="const l = this.parentElement.querySelector('.vault-preview-loader'); if(l) l.style.display='none'"></iframe>`;
+    // Use <object> as primary (better PDF support) with <iframe> as fallback inside it
+    content = `
+      <object data="${escA(url)}" type="application/pdf" class="preview-media preview-pdf" id="pdf-object-viewer">
+        <iframe src="${escA(url)}" class="preview-media preview-pdf" id="pdf-iframe-fallback"></iframe>
+      </object>
+      <div class="preview-pdf-error" id="pdf-error-msg" style="display:none">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+          <polyline points="13 2 13 9 20 9"/>
+          <path d="M10 12l4 4m0-4l-4 4"/>
+        </svg>
+        <p>Unable to render PDF inline</p>
+        <a href="${escA(url)}" target="_blank" class="btn btn-primary btn-sm">Open in New Tab</a>
+      </div>`;
     showLoader = true;
   } else {
     content = `<div class="preview-unsupported">
@@ -287,7 +305,15 @@ function openPreviewModal(url, filename) {
     <div class="vault-preview-card">
       <div class="vault-preview-header">
         <h3 title="${escA(filename)}">${esc(filename)}</h3>
-        <button class="vault-preview-close">&times;</button>
+        <div class="vault-preview-header-actions">
+          <a href="${escA(url)}" target="_blank" class="vault-preview-open-btn" title="Open in new tab">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          </a>
+          <a href="${escA(url)}" download="${escA(filename)}" class="vault-preview-download-btn" title="Download">
+            ${ICON_SVG.download}
+          </a>
+          <button class="vault-preview-close">&times;</button>
+        </div>
       </div>
       <div class="vault-preview-body">
         ${showLoader ? `<div class="vault-preview-loader"><div class="vault-spinner"></div></div>` : ''}
@@ -297,6 +323,25 @@ function openPreviewModal(url, filename) {
   `;
 
   document.body.appendChild(overlay);
+
+  // For PDF: detect load and hide loader, or show error after timeout
+  if (ext === 'pdf') {
+    const objEl = overlay.querySelector('#pdf-object-viewer');
+    const errorEl = overlay.querySelector('#pdf-error-msg');
+    const loader = overlay.querySelector('.vault-preview-loader');
+
+    // Hide loader once object loads
+    if (objEl) {
+      objEl.addEventListener('load', () => {
+        if (loader) loader.style.display = 'none';
+      });
+    }
+
+    // Safety timeout: if PDF hasn't rendered after 8s, hide loader
+    setTimeout(() => {
+      if (loader) loader.style.display = 'none';
+    }, 8000);
+  }
 
   // Trigger reflow for animation
   requestAnimationFrame(() => {

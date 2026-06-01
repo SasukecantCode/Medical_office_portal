@@ -6,6 +6,8 @@ import { api } from './api.js';
 import { animateCounter, showToast, initProgressBars, initExportDropdown } from './animations.js';
 import { staffAvatarHtml } from './staff.js';
 
+export { renderAdminLogs } from './admin_logs.js';
+
 export async function renderDashboardHome(container) {
   // Hide default main header to use our custom dashboard header
   const mainHeader = document.querySelector('.main-header');

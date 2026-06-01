@@ -54,13 +54,34 @@ def download_document(
     file_path: str = Query(...),
     storage=Depends(get_document_storage_service),
 ):
+    import mimetypes as _mt
+
     employee_id = validate_employee_id(employee_id)
     file_path = validate_file_path(employee_id, file_path)
     blob = storage.download_document(employee_id, file_path)
     filename = file_path.split("/", 1)[-1]
-    stream = blob.open("rb")
-    headers = {"Content-Disposition": f'inline; filename="{filename}"'}
-    return StreamingResponse(stream, media_type=blob.content_type or "application/octet-stream", headers=headers)
+
+    # Determine content-type from extension first, then blob, then fallback
+    guessed_type, _ = _mt.guess_type(filename)
+    media_type = guessed_type or blob.content_type or "application/octet-stream"
+
+    # Read full content so we can set Content-Length (required for PDF viewer)
+    if hasattr(blob, "download_as_bytes"):
+        content = blob.download_as_bytes()
+    else:
+        with blob.open("rb") as f:
+            content = f.read()
+
+    headers = {
+        "Content-Disposition": f'inline; filename="{filename}"',
+        "Content-Length": str(len(content)),
+        "Accept-Ranges": "bytes",
+    }
+    return StreamingResponse(
+        iter([content]),
+        media_type=media_type,
+        headers=headers,
+    )
 
 
 @router.delete("/delete")

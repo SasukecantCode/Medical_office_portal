@@ -4,6 +4,7 @@
 
 import { api } from './api.js';
 import { showToast } from './animations.js';
+import { hydrateStaffPhotos, resolveStaffPhotoObjectUrl, staffAvatarHtml } from './staff.js';
 
 // --- Utility Functions ---
 function escHtml(str) {
@@ -101,24 +102,17 @@ export async function renderIdCardsPage(container) {
         if (results.length === 0) {
           dropdown.innerHTML = '<div class="autocomplete-item">No matches found</div>';
         } else {
-          dropdown.innerHTML = results.map(s => {
-            const hasPhoto = s.photo_url && s.photo_url.trim();
-            const initials = s.full_name ? s.full_name.charAt(0).toUpperCase() : '?';
-            const avatarHtml = hasPhoto
-              ? `<img class="item-avatar-img" src="${escAttr(s.photo_url)}" alt="" />`
-              : `<span class="item-avatar">${escHtml(initials)}</span>`;
-
-            return `
+          dropdown.innerHTML = results.map(s => `
               <div class="autocomplete-item" data-id="${s.id}">
-                ${avatarHtml}
+                ${staffAvatarHtml(s, 28).replace('staff-avatar', 'item-avatar-wrap staff-avatar')}
                 <div style="display:flex; flex-direction:column; line-height:1.2;">
                   <strong>${escHtml(s.full_name)}</strong> 
                   <span style="font-size: 11px; color: rgba(255,255,255,0.45);">${escHtml(s.designation || 'N/A')}</span>
                 </div>
               </div>
-            `;
-          }).join('');
+            `).join('');
         }
+        await hydrateStaffPhotos(dropdown);
         dropdown.style.display = 'block';
       } catch (err) {
         console.error(err);
@@ -144,12 +138,13 @@ export async function renderIdCardsPage(container) {
       currentStaff = await api.getStaff(item.dataset.id);
       currentDraft = cloneStaff(currentStaff);
       window.__idcard_draft = currentDraft;
-      renderPreview(currentDraft, previewContainer, fieldDefs);
+      await renderPreview(currentDraft, previewContainer, fieldDefs);
       printBtn.disabled = false;
       downloadBtn.disabled = false;
       // populate modal body when opened
+      const photoSrc = await resolveStaffPhotoObjectUrl(currentDraft);
       modalBody.innerHTML = '';
-      modalBody.insertAdjacentHTML('beforeend', generateIdCardFront(currentDraft));
+      modalBody.insertAdjacentHTML('beforeend', generateIdCardFront(currentDraft, photoSrc));
       modalBody.insertAdjacentHTML('beforeend', generateIdCardBack(currentDraft, fieldDefs));
       // expose for delegated handlers
       window.__medical_last_idcard_staff = currentDraft;
@@ -186,7 +181,7 @@ export async function renderIdCardsPage(container) {
     }
   });
 
-  previewContainer.addEventListener('input', (e) => {
+  previewContainer.addEventListener('input', async (e) => {
     const input = e.target.closest('[data-idcard-key]');
     if (!input || !currentDraft) return;
 
@@ -196,9 +191,8 @@ export async function renderIdCardsPage(container) {
 
     const previewStage = previewContainer.querySelector('.idcard-preview-stage');
     if (previewStage) {
-      previewStage.innerHTML = buildPreviewHtml(currentDraft, fieldDefs);
+      previewStage.innerHTML = await buildPreviewHtml(currentDraft, fieldDefs);
     }
-
   });
 
   previewContainer.addEventListener('keydown', async (e) => {
@@ -217,7 +211,8 @@ export async function renderIdCardsPage(container) {
   });
 }
 
-function renderPreview(staff, container, fieldDefs = []) {
+async function renderPreview(staff, container, fieldDefs = []) {
+  const previewHtml = await buildPreviewHtml(staff, fieldDefs);
   container.innerHTML = `
     <div class="idcard-live-layout">
       <section class="idcard-editor-panel staff-form-container">
@@ -239,15 +234,16 @@ function renderPreview(staff, container, fieldDefs = []) {
           <span class="idcard-preview-badge">Preview</span>
         </div>
         <div class="idcard-preview-stage">
-          ${buildPreviewHtml(staff, fieldDefs)}
+          ${previewHtml}
         </div>
       </section>
     </div>
   `;
 }
 
-function buildPreviewHtml(staff, fieldDefs = []) {
-  const frontHtml = generateIdCardFront(staff);
+async function buildPreviewHtml(staff, fieldDefs = []) {
+  const photoSrc = await resolveStaffPhotoObjectUrl(staff);
+  const frontHtml = generateIdCardFront(staff, photoSrc);
   const backHtml = generateIdCardBack(staff, fieldDefs);
 
   return `
@@ -390,9 +386,9 @@ function cloneStaff(staff) {
   }
 }
 
-function generateIdCardFront(staff) {
+function generateIdCardFront(staff, photoSrc = null) {
   const staffId = staff?.id ? `#${staff.id}` : '';
-  const photo = staff.photo_url ? `<img src="${staff.photo_url}" style="width:100%; height:100%; object-fit:cover;" />` : '';
+  const photo = photoSrc ? `<img src="${escAttr(photoSrc)}" style="width:100%; height:100%; object-fit:cover;" alt="" crossorigin="anonymous" />` : '';
 
   const rows = [
     ['NAME', staff.full_name, true],
@@ -567,13 +563,14 @@ function formatDateValue(value) {
   }
 }
 
-function printIdCard() {
+async function printIdCard() {
   const draft = window.__idcard_draft || window.__medical_last_idcard_staff;
   const fieldDefs = window.__medical_field_defs || [];
   
   if (!draft) return;
 
-  const frontHtml = generateIdCardFront(draft);
+  const photoSrc = await resolveStaffPhotoObjectUrl(draft);
+  const frontHtml = generateIdCardFront(draft, photoSrc);
   const backHtml = generateIdCardBack(draft, fieldDefs);
 
   const printWindow = window.open('', '_blank');
@@ -712,7 +709,29 @@ function buildIdCardExportMarkup(frontHtml, backHtml) {
   `;
 }
 
+function waitForImages(root, timeoutMs = 8000) {
+  const images = [...root.querySelectorAll('img')];
+  if (!images.length) return Promise.resolve();
+
+  return Promise.all(
+    images.map(
+      (img) =>
+        new Promise((resolve) => {
+          if (img.complete && img.naturalWidth > 0) {
+            resolve();
+            return;
+          }
+          const done = () => resolve();
+          img.addEventListener('load', done, { once: true });
+          img.addEventListener('error', done, { once: true });
+          setTimeout(done, timeoutMs);
+        })
+    )
+  );
+}
+
 async function captureIdCardImage(container, scale = 3) {
+  await waitForImages(container);
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   return html2canvas(container, {
     scale,
@@ -728,7 +747,8 @@ window.downloadIdCardJpeg = async function() {
   
   if (!draft) return;
 
-  const frontHtml = generateIdCardFront(draft);
+  const photoSrc = await resolveStaffPhotoObjectUrl(draft);
+  const frontHtml = generateIdCardFront(draft, photoSrc);
   const backHtml = generateIdCardBack(draft, fieldDefs);
 
   // Create an off-screen container to render the cards perfectly flat
@@ -802,7 +822,8 @@ export async function generateIdCardsZip(staffList, fieldDefs = [], opts = {}) {
         continue;
       }
 
-      const frontHtml = generateIdCardFront(staff);
+      const photoSrc = await resolveStaffPhotoObjectUrl(staff);
+      const frontHtml = generateIdCardFront(staff, photoSrc);
       const backHtml = generateIdCardBack(staff, fieldDefs);
 
       container.innerHTML = buildIdCardExportMarkup(frontHtml, backHtml);

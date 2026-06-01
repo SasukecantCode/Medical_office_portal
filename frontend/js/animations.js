@@ -220,12 +220,29 @@ export function initExportDropdown(root, onExport) {
   const menu = root.querySelector('.export-dropdown-menu');
   if (!trigger || !menu) return;
 
+  let outsideHandler = null;
+
   const close = () => {
     root.classList.remove('open');
     trigger.setAttribute('aria-expanded', 'false');
+    if (outsideHandler) {
+      document.removeEventListener('click', outsideHandler, true);
+      outsideHandler = null;
+    }
+  };
+
+  const runExport = async (format) => {
+    close();
+    try {
+      await onExport(format);
+      showToast(`Staff export (${format.toUpperCase()}) downloaded`, 'success');
+    } catch (err) {
+      showToast(err?.message || 'Export failed', 'error');
+    }
   };
 
   trigger.addEventListener('click', (e) => {
+    e.preventDefault();
     e.stopPropagation();
     const willOpen = !root.classList.contains('open');
     document.querySelectorAll('.export-dropdown.open').forEach((el) => {
@@ -236,21 +253,84 @@ export function initExportDropdown(root, onExport) {
     });
     root.classList.toggle('open', willOpen);
     trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+
+    if (outsideHandler) {
+      document.removeEventListener('click', outsideHandler, true);
+      outsideHandler = null;
+    }
+    if (willOpen) {
+      setTimeout(() => {
+        outsideHandler = (ev) => {
+          if (!root.contains(ev.target)) close();
+        };
+        document.addEventListener('click', outsideHandler, true);
+      }, 0);
+    }
   });
 
-  menu.querySelectorAll('[data-export-format]').forEach((item) => {
-    item.addEventListener('click', (e) => {
-      e.stopPropagation();
-      onExport(item.dataset.exportFormat);
-      close();
-    });
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!root.contains(e.target)) close();
+  menu.addEventListener('click', (e) => {
+    const item = e.target.closest('[data-export-format]');
+    if (!item) return;
+    e.preventDefault();
+    e.stopPropagation();
+    runExport(item.dataset.exportFormat);
   });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') close();
+    if (e.key === 'Escape' && root.classList.contains('open')) close();
   });
+}
+
+const PAGE_LOAD_MIN_MS = 550;
+
+function pageLoadingMarkup() {
+  return `
+    <div class="page-loading-shell" role="status" aria-live="polite" aria-busy="true" aria-label="Loading">
+      <div class="page-loader" aria-hidden="true"></div>
+    </div>
+  `;
+}
+
+/**
+ * Full-page loading markup inside main-body (fallback).
+ */
+export function setPageLoadingShell(container) {
+  if (!container) return;
+  container.innerHTML = pageLoadingMarkup();
+}
+
+let pageLoadingOverlayEl = null;
+
+function getPageLoadingOverlay() {
+  if (!pageLoadingOverlayEl) {
+    pageLoadingOverlayEl = document.getElementById('page-loading-overlay');
+  }
+  return pageLoadingOverlayEl;
+}
+
+/** Fixed overlay — stays visible while render() replaces main-body. */
+export function showPageLoadingOverlay() {
+  const overlay = getPageLoadingOverlay();
+  if (!overlay) return;
+  overlay.innerHTML = pageLoadingMarkup();
+  overlay.hidden = false;
+  overlay.setAttribute('aria-hidden', 'false');
+  overlay.classList.add('is-visible');
+  document.body.classList.add('page-loading-active');
+}
+
+export function hidePageLoadingOverlay() {
+  const overlay = getPageLoadingOverlay();
+  if (!overlay) return;
+  overlay.classList.remove('is-visible');
+  overlay.setAttribute('aria-hidden', 'true');
+  overlay.hidden = true;
+  overlay.innerHTML = '';
+  document.body.classList.remove('page-loading-active');
+}
+
+export function pageLoadDelay(startMs) {
+  const elapsed = Date.now() - startMs;
+  if (elapsed >= PAGE_LOAD_MIN_MS) return Promise.resolve();
+  return new Promise((r) => setTimeout(r, PAGE_LOAD_MIN_MS - elapsed));
 }

@@ -1,4 +1,4 @@
-.PHONY: start backend frontend install
+.PHONY: start backend frontend install seed-master
 
 start:
 	@echo "Starting both backend and frontend concurrently..."
@@ -22,3 +22,6 @@ install:
 		echo "Creating .env from example..."; \
 		cp backend/.env.example backend/.env; \
 	fi
+
+seed-master:
+	bash -c "source .venv/bin/activate && cd backend && python seed_master.py"

@@ -286,6 +286,9 @@ def on_startup() -> None:
     # Ensure models are registered before create_all
     from app.models import hr_staff  # noqa: F401
     from app.models import hr_staff_attachment  # noqa: F401
+    from app.models import auth_user  # noqa: F401
+    from app.models import auth_invite  # noqa: F401
+    from app.models import admin_access_log  # noqa: F401
 
     # Ensure uploads dir exists (local MVP)
     Path(settings.uploads_dir).mkdir(parents=True, exist_ok=True)

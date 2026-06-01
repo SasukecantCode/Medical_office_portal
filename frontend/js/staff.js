@@ -2,7 +2,7 @@
    Staff — CRUD UI (List, Create, Edit, Attachments)
    ═══════════════════════════════════════════════════════ */
 
-import { api } from './api.js';
+import { api, clearStaffPhotoCache, getStaffPhotoObjectUrl } from './api.js';
 import { showToast } from './animations.js';
 import { renderVault } from './vault.js';
 
@@ -105,19 +105,21 @@ async function loadStaffTable() {
       .map(
         (s) => `
       <tr data-id="${s.id}" style="cursor: pointer" class="staff-row">
-        <td>${s.id}</td>
-        <td>${staffAvatarHtml(s, 32)}</td>
-        <td><strong>${escHtml(s.full_name)}</strong></td>
-        <td>${escHtml(s.designation || '')}</td>
-        <td>${escHtml(s.facility_name || '')}</td>
-        <td>${escHtml(s.district || '')}</td>
-        <td>${escHtml(s.employment_type || '')}</td>
-        <td>${escHtml(s.phone || '-')}</td>
-        <td>${formatDate(s.created_at)}</td>
+        <td data-label="ID">${s.id}</td>
+        <td data-label="Photo">${staffAvatarHtml(s, 32)}</td>
+        <td data-label="Full Name"><strong>${escHtml(s.full_name)}</strong></td>
+        <td data-label="Designation">${escHtml(s.designation || '')}</td>
+        <td data-label="Facility">${escHtml(s.facility_name || '')}</td>
+        <td data-label="District">${escHtml(s.district || '')}</td>
+        <td data-label="Employment">${escHtml(s.employment_type || '')}</td>
+        <td data-label="Phone">${escHtml(s.phone || '-')}</td>
+        <td data-label="Created">${formatDate(s.created_at)}</td>
       </tr>
     `
       )
       .join('');
+
+    await hydrateStaffPhotos(tbody);
 
     // Attach row action listeners for opening profile card
     tbody.querySelectorAll('.staff-row').forEach((row) => {
@@ -191,6 +193,7 @@ async function showProfileCard(staffId) {
     }));
 
     const allFields = [...coreFields, ...extraFields].filter(f => f.val && String(f.val).trim() !== '');
+    const mayHavePhoto = staffHasPhoto(s) || s.id;
 
     const fieldsHtml = allFields.map(f => `
       <div class="profile-field">
@@ -203,8 +206,8 @@ async function showProfileCard(staffId) {
       <div class="profile-card">
         <div class="profile-card-header">
           <button type="button" class="profile-card-close" aria-label="Close">✕</button>
-          <div class="profile-card-avatar">
-            ${s.photo_url ? `<img src="${s.photo_url}" alt="${escAttr(s.full_name)}" />` : `<span class="staff-avatar-initial">${s.full_name.charAt(0).toUpperCase()}</span>`}
+          <div class="profile-card-avatar staff-avatar${mayHavePhoto ? ' staff-avatar--pending' : ''}" style="width:80px;height:80px;">
+            <span class="staff-avatar-initial" aria-hidden="true">${s.full_name.charAt(0).toUpperCase()}</span>
           </div>
           <div class="profile-card-title">
             <h2>${escHtml(s.full_name)}</h2>
@@ -227,6 +230,11 @@ async function showProfileCard(staffId) {
     `;
 
     document.body.appendChild(modal);
+
+    const avatarEl = modal.querySelector('.profile-card-avatar');
+    if (avatarEl) {
+      await applyStaffPhotoToElement(avatarEl, s);
+    }
 
     // Animate in
     requestAnimationFrame(() => modal.classList.add('open'));
@@ -358,7 +366,8 @@ export async function renderStaffForm(container, staffId = null) {
   const customFieldsHtml = renderCustomFieldsHtml(fieldDefs, staffData?.extra || {});
 
   const isEdit = !!staffId;
-  const photoRequired = !isEdit || !staffData.photo_url;
+  const hasExistingPhoto = staffHasPhoto(staffData);
+  const photoRequired = !isEdit || !hasExistingPhoto;
 
   container.innerHTML = `
     <div class="staff-form-container">
@@ -447,12 +456,8 @@ export async function renderStaffForm(container, staffId = null) {
             <div class="form-group form-grid-full">
               <label class="form-label">Profile Photo (JPEG) ${photoRequired ? '<span class="required">*</span>' : ''}</label>
               <div style="display:flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-                <div style="width:72px; height:72px; border-radius: 14px; overflow: hidden; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); display:flex; align-items:center; justify-content:center;">
-                  ${
-                    staffData.photo_url
-                      ? `<img src="${escAttr(staffData.photo_url)}" alt="Profile photo" style="width:100%; height:100%; object-fit: cover;" />`
-                      : `<span style="color: var(--clr-text-subtle); font-size: 12px;">No photo</span>`
-                  }
+                <div id="form-photo-preview" class="staff-avatar" style="width:72px; height:72px; border-radius: 14px;"${hasExistingPhoto ? ` data-photo-staff-id="${staffId}" data-photo-version="${staffData.updated_at ? new Date(staffData.updated_at).getTime() : staffId}"` : ''}>
+                  <span class="staff-avatar-initial" style="font-size:12px; color: var(--clr-text-subtle);">${hasExistingPhoto ? '' : 'No photo'}</span>
                 </div>
                 <div style="flex:1; min-width: 240px;">
                   <input class="form-input" id="profile-photo" type="file" accept="image/jpeg" ${photoRequired ? 'required' : ''} />
@@ -487,6 +492,11 @@ export async function renderStaffForm(container, staffId = null) {
   });
 
   attachPhonePrefixHandlers(container);
+
+  const formPreview = document.getElementById('form-photo-preview');
+  if (formPreview?.dataset.photoStaffId) {
+    await hydrateStaffPhotos(formPreview);
+  }
 
   document.getElementById('staff-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -533,6 +543,7 @@ export async function renderStaffForm(container, staffId = null) {
         const photoFile = document.getElementById('profile-photo')?.files?.[0];
         if (photoFile) {
           await api.uploadProfilePhoto(staffId, photoFile);
+          clearStaffPhotoCache();
         }
 
         const docInput = document.getElementById('doc-files');
@@ -550,6 +561,7 @@ export async function renderStaffForm(container, staffId = null) {
           throw new Error('Profile photo (JPEG) is required');
         }
         await api.uploadProfilePhoto(created.id, photoFile);
+        clearStaffPhotoCache();
 
         const docInput = document.getElementById('doc-files');
         const docs = docInput?.files ? Array.from(docInput.files) : [];
@@ -740,21 +752,113 @@ export async function renderAttachments(container, staffId, staffName, staffData
 // Helpers
 // ════════════════════════════════════════════
 
+export function staffHasPhoto(staff) {
+  return Boolean(staff?.photo_url || staff?.profile_photo_stored_filename);
+}
+
+function staffPhotoCacheKey(staff) {
+  if (!staff?.id) return '';
+  return staff.updated_at ? String(new Date(staff.updated_at).getTime()) : String(staff.id);
+}
+
+function loadImageFromUrl(img, url) {
+  return new Promise((resolve) => {
+    if (img.src === url && img.complete && img.naturalWidth > 0) {
+      resolve(true);
+      return;
+    }
+    img.onload = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.src = url;
+  });
+}
+
+/** Load authenticated profile photos into elements marked with data-photo-staff-id. */
+export async function hydrateStaffPhotos(root = document) {
+  const nodes = root.querySelectorAll('[data-photo-staff-id]');
+  await Promise.all(
+    [...nodes].map(async (el) => {
+      const staffId = el.dataset.photoStaffId;
+      if (!staffId) return;
+
+      const objectUrl = await getStaffPhotoObjectUrl(staffId, el.dataset.photoVersion || '');
+      if (!objectUrl) return;
+
+      let img = el.querySelector('img');
+      if (!img) {
+        img = document.createElement('img');
+        img.alt = el.getAttribute('title') || '';
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        el.appendChild(img);
+      }
+
+      const ok = await loadImageFromUrl(img, objectUrl);
+      if (ok) {
+        el.classList.add('has-photo');
+        el.classList.remove('staff-avatar--pending');
+      } else {
+        img.remove();
+        el.classList.remove('has-photo', 'staff-avatar--pending');
+      }
+    })
+  );
+}
+
+/** Profile modal / large avatars — always try fetch when we have a staff id. */
+export async function applyStaffPhotoToElement(el, staff) {
+  if (!el || !staff?.id) return false;
+
+  const version = staffPhotoCacheKey(staff);
+  el.dataset.photoStaffId = String(staff.id);
+  el.dataset.photoVersion = version;
+
+  const objectUrl = await getStaffPhotoObjectUrl(staff.id, version);
+  if (!objectUrl) return false;
+
+  let img = el.querySelector('img');
+  if (!img) {
+    img = document.createElement('img');
+    img.alt = staff.full_name || '';
+    el.appendChild(img);
+  }
+
+  const ok = await loadImageFromUrl(img, objectUrl);
+  if (ok) {
+    el.classList.add('has-photo');
+    el.classList.remove('staff-avatar--pending');
+    return true;
+  }
+
+  img.remove();
+  el.classList.remove('has-photo', 'staff-avatar--pending');
+  return false;
+}
+
+/** Authenticated blob URL for ID cards / print (not for raw img src without hydrate). */
+export async function resolveStaffPhotoObjectUrl(staff) {
+  if (!staffHasPhoto(staff) || !staff?.id) return null;
+  return getStaffPhotoObjectUrl(staff.id, staffPhotoCacheKey(staff));
+}
+
+/** @deprecated Use hydrateStaffPhotos; kept for callers that check presence only */
+export function resolveStaffPhotoUrl(staff) {
+  return staffHasPhoto(staff) ? `staff:${staff.id}` : null;
+}
+
 /** Circular avatar: profile JPEG when uploaded, otherwise initial letter */
 export function staffAvatarHtml(staff, size = 32) {
   const name = staff?.full_name || '';
   const initial = name ? name.charAt(0).toUpperCase() : '?';
   const px = `${size}px`;
-  const photo = staff?.photo_url;
-
-  const img = photo
-    ? `<img src="${escAttr(photo)}" alt="" loading="lazy" onerror="this.remove()" />`
+  const hasPhoto = staffHasPhoto(staff);
+  const photoAttrs = hasPhoto
+    ? ` data-photo-staff-id="${staff.id}" data-photo-version="${escAttr(staffPhotoCacheKey(staff))}"`
     : '';
 
   return `
-    <span class="staff-avatar" style="width:${px};height:${px};" data-initial="${escAttr(initial)}" title="${escAttr(name)}">
+    <span class="staff-avatar${hasPhoto ? ' staff-avatar--pending' : ''}" style="width:${px};height:${px};"${photoAttrs} data-initial="${escAttr(initial)}" title="${escAttr(name)}">
       <span class="staff-avatar-initial" aria-hidden="true">${escHtml(initial)}</span>
-      ${img}
     </span>
   `;
 }

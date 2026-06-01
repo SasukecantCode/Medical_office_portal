@@ -4,7 +4,7 @@
  * Enhanced agent mode supports all portal actions: CRUD, bulk ID cards, exports, navigation.
  */
 
-import * as api from './api.js';
+import { api } from './api.js';
 import { generateIdCardsZip } from './id_cards.js';
 
 // DOM references
@@ -256,9 +256,125 @@ function getConversationMessages(limit = 16) {
   }));
 }
 
+const mobileChatMq = window.matchMedia('(max-width: 768px)');
+
+function resetChatViewport() {
+  chatPanel?.classList.remove('keyboard-visible');
+  const root = document.documentElement;
+  root.style.removeProperty('--chat-vv-height');
+  root.style.removeProperty('--chat-vv-top');
+  if (chatPanel) {
+    chatPanel.style.removeProperty('height');
+    chatPanel.style.removeProperty('top');
+    chatPanel.style.removeProperty('left');
+    chatPanel.style.removeProperty('right');
+    chatPanel.style.removeProperty('width');
+  }
+}
+
+function syncChatViewport() {
+  if (!chatPanel?.classList.contains('open') || !mobileChatMq.matches) {
+    resetChatViewport();
+    return;
+  }
+
+  const vv = window.visualViewport;
+  const root = document.documentElement;
+
+  if (!vv) {
+    root.style.setProperty('--chat-vv-height', '100dvh');
+    root.style.setProperty('--chat-vv-top', '0px');
+    chatPanel.style.height = '100dvh';
+    chatPanel.style.top = '0px';
+    chatPanel.style.left = '0';
+    chatPanel.style.right = '0';
+    chatPanel.style.width = '100%';
+    return;
+  }
+
+  let height = Math.round(vv.height);
+  let top = Math.round(vv.offsetTop);
+  if (height < 120) {
+    height = Math.round(window.innerHeight);
+    top = 0;
+  }
+  const keyboardGap = Math.max(0, window.innerHeight - height - top);
+
+  root.style.setProperty('--chat-vv-height', `${height}px`);
+  root.style.setProperty('--chat-vv-top', `${top}px`);
+
+  chatPanel.style.left = '0';
+  chatPanel.style.right = '0';
+  chatPanel.style.width = '100%';
+  chatPanel.style.height = `${height}px`;
+  chatPanel.style.top = `${top}px`;
+
+  const keyboardVisible = keyboardGap > 50 || height < window.innerHeight * 0.85;
+  chatPanel.classList.toggle('keyboard-visible', keyboardVisible);
+
+  if (vv.offsetTop > 0 || window.scrollY > 0) {
+    window.scrollTo(0, 0);
+  }
+
+  if (chatMessages) {
+    requestAnimationFrame(() => {
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    });
+  }
+}
+
+function initMobileChatViewport() {
+  if (!window.visualViewport) return;
+
+  const onViewportChange = () => syncChatViewport();
+
+  window.visualViewport.addEventListener('resize', onViewportChange);
+  window.visualViewport.addEventListener('scroll', onViewportChange);
+  mobileChatMq.addEventListener('change', () => {
+    if (!mobileChatMq.matches) resetChatViewport();
+    else syncChatViewport();
+  });
+
+  chatInput?.addEventListener('focus', () => {
+    setTimeout(syncChatViewport, 50);
+    setTimeout(syncChatViewport, 150);
+    setTimeout(syncChatViewport, 320);
+    setTimeout(syncChatViewport, 500);
+  });
+
+  chatInput?.addEventListener('input', () => {
+    if (mobileChatMq.matches && chatPanel.classList.contains('open')) {
+      syncChatViewport();
+    }
+  });
+
+  chatInput?.addEventListener('blur', () => {
+    setTimeout(() => {
+      if (document.activeElement !== chatInput) {
+        chatPanel?.classList.remove('keyboard-visible');
+        syncChatViewport();
+      }
+    }, 120);
+  });
+}
+
 function setChatOpen(isOpen) {
+  if (!chatPanel) return;
   chatPanel.classList.toggle('open', isOpen);
   document.body.classList.toggle('chat-open', isOpen);
+  if (isOpen) {
+    chatPanel.style.removeProperty('visibility');
+    chatPanel.style.removeProperty('opacity');
+    requestAnimationFrame(syncChatViewport);
+    setTimeout(syncChatViewport, 350);
+  } else {
+    resetChatViewport();
+    chatPanel.style.removeProperty('height');
+    chatPanel.style.removeProperty('top');
+    chatPanel.style.removeProperty('left');
+    chatPanel.style.removeProperty('right');
+    chatPanel.style.removeProperty('width');
+  }
 }
 
 /**
@@ -325,9 +441,11 @@ export function initChat() {
     if (e.key === 'Escape' && chatPanel.classList.contains('open')) closeChat();
   });
 
-  // Tap outside to close (mobile)
+  initMobileChatViewport();
+
+  // Tap outside to close (mobile fullscreen chat only)
   document.addEventListener('pointerdown', (e) => {
-    if (!chatPanel.classList.contains('open')) return;
+    if (!mobileChatMq.matches || !chatPanel.classList.contains('open')) return;
     const target = e.target;
     if (chatPanel.contains(target) || chatToggle.contains(target)) return;
     closeChat();
@@ -342,7 +460,10 @@ export function initChat() {
  */
 export function openChat() {
   setChatOpen(true);
-  setTimeout(() => chatInput.focus(), 0);
+  setTimeout(() => {
+    syncChatViewport();
+    chatInput.focus();
+  }, 0);
 }
 
 /**
@@ -397,20 +518,7 @@ async function handleFileUpload(e) {
   addMessage(`📁 Analyzing ${file.name}...`);
 
   try {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    // Call parse endpoint
-    const response = await fetch('/api/hr/agent/parse', {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to parse file: ${response.statusText}`);
-    }
-
-    parseResult = await response.json();
+    parseResult = await api.agentParse(file);
     const { headers, samples, suggestions } = parseResult;
 
     // Display results
@@ -448,15 +556,18 @@ async function sendMessage() {
   if (!text) return;
 
   chatInput.value = '';
+  if (chatSendBtn) chatSendBtn.disabled = true;
 
   addMessage(text, true);
 
-  // Handle specific commands
-  if (text.toLowerCase() === 'import' && parseResult) {
-    await importParsedFile();
-  } else {
-    // Send to chat API for general questions
-    await sendChatMessage();
+  try {
+    if (text.toLowerCase() === 'import' && parseResult) {
+      await importParsedFile();
+    } else {
+      await sendChatMessage();
+    }
+  } finally {
+    if (chatSendBtn) chatSendBtn.disabled = false;
   }
 }
 
@@ -472,20 +583,7 @@ async function importParsedFile() {
   addMessage('⏳ Importing rows...');
 
   try {
-    const formData = new FormData();
-    formData.append('file', currentFile);
-    formData.append('mapping', JSON.stringify(parseResult.suggestions));
-
-    const response = await fetch('/api/hr/agent/import', {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Import failed: ${response.statusText}`);
-    }
-
-    const result = await response.json();
+    const result = await api.agentImport(currentFile, parseResult.suggestions);
     const { created, skipped } = result;
 
     addMessage(
@@ -516,23 +614,13 @@ async function sendChatMessage() {
     const messages = getConversationMessages();
     const allow_write = mode === 'agent';
 
-    const response = await fetch('/api/hr/agent/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        mode,
-        messages,
-        allow_write,
-      }),
+    const data = await api.agentChat({
+      mode,
+      messages,
+      allow_write,
     });
 
     removeTypingIndicator(typingId);
-
-    if (!response.ok) {
-      throw new Error(`Chat error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
     const reply = data.reply || 'No response from assistant.';
     const actions = data.actions || [];
 
@@ -718,9 +806,10 @@ function handleExportStaff(result, args) {
     `;
     addRichMessage(`📊 Export ready! Download your ${format.toUpperCase()} file.`, html);
   } else {
-    // Fallback: direct browser navigation
-    window.location.href = `/api/hr/staff/export?format=${encodeURIComponent(format)}`;
-    addMessage(`📊 Downloading ${format.toUpperCase()} export...`);
+    api
+      .exportStaff(format)
+      .then(() => addMessage(`📊 Downloaded ${format.toUpperCase()} export.`))
+      .catch((err) => addMessage(`❌ Export failed: ${err.message}`));
   }
 }
 
