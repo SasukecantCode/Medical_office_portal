@@ -4,7 +4,7 @@
 
 import { api, clearStaffPhotoCache, getStaffPhotoObjectUrl } from './api.js';
 import { showToast } from './animations.js';
-import { renderVault } from './vault.js';
+import { renderVault, openOnlyOfficeEditor } from './vault.js';
 
 // ── State ──
 let currentFilters = { q: '', district: '', designation: '', employment_type: '', limit: 50 };
@@ -223,6 +223,7 @@ async function showProfileCard(staffId) {
           <div class="row-actions">
             <button class="btn-edit" data-action="edit" data-id="${s.id}">Edit Profile</button>
             <button class="btn-attach" data-action="attach" data-id="${s.id}" data-name="${escAttr(s.full_name)}">Files</button>
+            <button class="btn-word" data-action="word" data-id="${s.id}" data-name="${escAttr(s.full_name)}">Word</button>
             <button class="btn-delete" data-action="delete" data-id="${s.id}" data-name="${escAttr(s.full_name)}">Delete</button>
           </div>
         </div>
@@ -278,6 +279,28 @@ async function handleRowAction(e) {
     let staffData = {};
     try { staffData = await api.getStaff(id); } catch { /* ok */ }
     window._navigateTo('attachments', { staffId: id, staffName: name, staffData });
+  } else if (action === 'word') {
+    try {
+      showToast('Opening employee document...', 'info', 2000);
+      // Determine employee dynamically
+      const safeName = (name || 'Unknown').replace(/[^a-zA-Z0-9_\-\s]/g, '').trim().replace(/\s+/g, '_');
+      const empIdRaw = `EMP${String(id).padStart(3, '0')}`;
+      const empId = `${safeName}_${empIdRaw}`;
+      
+      const data = await api.listDrafts(empId);
+      let draftId;
+      if (data && data.drafts && data.drafts.length > 0) {
+        draftId = data.drafts[0].draft_id;
+      } else {
+        const title = 'Employee Document';
+        const draft = await api.createDraft(empId, title);
+        draftId = draft.draft_id;
+        showToast('New document created!', 'success');
+      }
+      openOnlyOfficeEditor(empId, draftId);
+    } catch (err) {
+      showToast(`Failed to open document: ${err.message}`, 'error');
+    }
   }
 }
 

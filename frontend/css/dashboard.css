@@ -1188,6 +1188,16 @@ body.dashboard-active #dashboard-view.dashboard {
   box-shadow: var(--glow-indigo);
 }
 
+.row-actions .btn-word {
+  color: #6EE7B7;
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+.row-actions .btn-word:hover {
+  background: rgba(16, 185, 129, 0.2);
+  box-shadow: var(--glow-success);
+}
+
 /* ── Pagination pills ── */
 .pagination {
   display: flex;

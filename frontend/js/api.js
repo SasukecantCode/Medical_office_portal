@@ -394,6 +394,32 @@ export const api = {
       body: JSON.stringify({ employee_id: employeeId }),
     }),
 
+  // ── Document Drafts (ONLYOFFICE) ──
+  createDraft: (employeeId, title) =>
+    request('/documents/drafts/create', {
+      method: 'POST',
+      body: JSON.stringify({ employee_id: employeeId, title: title || null }),
+    }),
+
+  listDrafts: (employeeId) =>
+    request(`/documents/drafts/${encodeURIComponent(employeeId)}`),
+
+  getDraft: (employeeId, draftId) =>
+    request(`/documents/drafts/${encodeURIComponent(employeeId)}/${encodeURIComponent(draftId)}`),
+
+  getDraftConfig: (employeeId, draftId) =>
+    request(`/documents/drafts/${encodeURIComponent(employeeId)}/${encodeURIComponent(draftId)}/onlyoffice-config`),
+
+  deleteDraft: (employeeId, draftId) =>
+    request(`/documents/drafts/${encodeURIComponent(employeeId)}/${encodeURIComponent(draftId)}`, {
+      method: 'DELETE',
+    }),
+
+  downloadDraftSourceUrl: (employeeId, draftId, token) => {
+    const qs = new URLSearchParams({ token });
+    return `${API_BASE}/documents/drafts/${encodeURIComponent(employeeId)}/${encodeURIComponent(draftId)}/source?${qs.toString()}`;
+  },
+
   // HR Agent (chat / import)
   agentChat: (body) =>
     request('/hr/agent/chat', {

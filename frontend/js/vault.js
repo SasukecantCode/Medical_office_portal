@@ -15,6 +15,10 @@ const ICON_SVG = {
   folder: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,
   empty: `<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>`,
   zip: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>`,
+  draft: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`,
+  plus: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  edit: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+  clock: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
 };
 
 let _sortField = 'category';
@@ -123,6 +127,23 @@ export async function renderVault(container, staffId, staffName, staffData) {
       </div>
     </div>
 
+    <div class="attachments-panel drafts-card" id="vault-drafts-panel" style="margin-bottom: var(--space-lg);">
+      <div class="drafts-card-header">
+        <div class="drafts-card-header-left">
+          <div class="drafts-card-icon">${ICON_SVG.draft}</div>
+          <div>
+            <h4 class="drafts-card-title">Document Drafts</h4>
+            <p class="drafts-card-subtitle">Create and edit Word documents with ONLYOFFICE</p>
+          </div>
+        </div>
+        <button class="btn-create-draft" id="vault-create-draft-btn" title="New Draft">
+          ${ICON_SVG.plus}
+          <span>New Draft</span>
+        </button>
+      </div>
+      <div id="vault-drafts-list" class="drafts-list"></div>
+    </div>
+
     <div class="attachments-panel" id="vault-list-panel">
       <div class="vault-toolbar">
         <div class="vault-toolbar-left">
@@ -182,9 +203,23 @@ export async function renderVault(container, staffId, staffName, staffData) {
     fileInput.value = '';
   });
 
+  // Create draft button
+  document.getElementById('vault-create-draft-btn').addEventListener('click', async () => {
+    const title = prompt('Draft title (leave blank for "Untitled Draft"):');
+    if (title === null) return; // cancelled
+    try {
+      showToast('Creating draft…', 'info', 2000);
+      await api.createDraft(empId, title || 'Untitled Draft');
+      showToast('Draft created!', 'success');
+      await loadDrafts(empId);
+    } catch (err) {
+      showToast(`Failed to create draft: ${err.message}`, 'error');
+    }
+  });
+
   // Initial load — create folder first (idempotent), then list
   try { await api.createDocumentFolder(empId); } catch { /* ok if exists */ }
-  await loadVaultFiles(empId);
+  await Promise.all([loadVaultFiles(empId), loadDrafts(empId)]);
 }
 
 async function loadVaultFiles(empId) {
@@ -523,4 +558,216 @@ async function uploadFiles(empId, files) {
     }
   }
   await loadVaultFiles(empId);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Draft management — dedicated Drafts card
+   ═══════════════════════════════════════════════════════ */
+
+async function loadDrafts(empId) {
+  const listEl = document.getElementById('vault-drafts-list');
+  if (!listEl) return;
+
+  try {
+    const data = await api.listDrafts(empId);
+    const drafts = data.drafts || [];
+
+    if (drafts.length === 0) {
+      listEl.innerHTML = `
+        <div class="drafts-empty">
+          <div class="drafts-empty-icon">${ICON_SVG.draft}</div>
+          <p>No drafts yet</p>
+          <span>Click "New Draft" to create a blank Word document</span>
+        </div>`;
+      return;
+    }
+
+    listEl.innerHTML = drafts.map(d => `
+      <div class="draft-item" data-draft-id="${escA(d.draft_id)}" data-emp-id="${escA(d.employee_id)}">
+        <div class="draft-item-icon">📝</div>
+        <div class="draft-item-info">
+          <div class="draft-item-title">${esc(d.title)}</div>
+          <div class="draft-item-meta">
+            ${ICON_SVG.clock}
+            <span>${fmtDate(d.updated_at)}</span>
+            <span class="draft-meta-sep">•</span>
+            <span>${fmtSize(d.size)}</span>
+            <span class="draft-meta-sep">•</span>
+            <span class="draft-version-badge">v${d.version}</span>
+          </div>
+        </div>
+        <div class="draft-item-actions">
+          <button class="draft-action-btn draft-action-edit" data-action="open-editor" title="Open in Editor">
+            ${ICON_SVG.edit}
+          </button>
+          <button class="draft-action-btn draft-action-download" data-action="download-draft" title="Download DOCX">
+            ${ICON_SVG.download}
+          </button>
+          <button class="draft-action-btn draft-action-delete" data-action="delete-draft" title="Delete Draft">
+            ${ICON_SVG.trash}
+          </button>
+        </div>
+      </div>
+    `).join('');
+
+    wireDraftActions(listEl, empId);
+  } catch (err) {
+    listEl.innerHTML = `
+      <div class="drafts-empty">
+        <p>Could not load drafts</p>
+        <span>${esc(err.message)}</span>
+      </div>`;
+  }
+}
+
+function wireDraftActions(listEl, empId) {
+  listEl.querySelectorAll('[data-action="open-editor"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const item = btn.closest('.draft-item');
+      const draftId = item.dataset.draftId;
+      const empIdVal = item.dataset.empId;
+      openOnlyOfficeEditor(empIdVal, draftId);
+    });
+  });
+
+  listEl.querySelectorAll('[data-action="download-draft"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const item = btn.closest('.draft-item');
+      const draftId = item.dataset.draftId;
+      const empIdVal = item.dataset.empId;
+      try {
+        const config = await api.getDraftConfig(empIdVal, draftId);
+        const sourceUrl = config.editor_config?.document?.url;
+        if (sourceUrl) {
+          const a = document.createElement('a');
+          a.href = sourceUrl;
+          a.download = config.draft?.file_name || `${draftId}.docx`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } else {
+          showToast('Could not get download URL', 'error');
+        }
+      } catch (err) {
+        showToast(`Download failed: ${err.message}`, 'error');
+      }
+    });
+  });
+
+  listEl.querySelectorAll('[data-action="delete-draft"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const item = btn.closest('.draft-item');
+      const draftId = item.dataset.draftId;
+      const empIdVal = item.dataset.empId;
+      const title = item.querySelector('.draft-item-title')?.textContent || 'this draft';
+      if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+      try {
+        await api.deleteDraft(empIdVal, draftId);
+        showToast('Draft deleted', 'success');
+        item.classList.add('draft-item--removing');
+        setTimeout(() => loadDrafts(empId), 300);
+      } catch (err) {
+        showToast(`Delete failed: ${err.message}`, 'error');
+      }
+    });
+  });
+}
+
+export async function openOnlyOfficeEditor(empId, draftId) {
+  try {
+    showToast('Loading editor configuration…', 'info', 2000);
+    const data = await api.getDraftConfig(empId, draftId);
+    const editorConfig = data.editor_config;
+    const draft = data.draft;
+
+    // Build a full-screen ONLYOFFICE editor overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'onlyoffice-overlay';
+    overlay.innerHTML = `
+      <div class="onlyoffice-container">
+        <div class="onlyoffice-header">
+          <div class="onlyoffice-header-left">
+            <div class="onlyoffice-header-icon">📝</div>
+            <div>
+              <div class="onlyoffice-doc-title">${esc(draft.title)}</div>
+              <div class="onlyoffice-doc-meta">Draft v${draft.version} • ${fmtDate(draft.updated_at)}</div>
+            </div>
+          </div>
+          <div class="onlyoffice-header-actions">
+            <button class="btn btn-ghost btn-sm" id="oo-copy-config" title="Copy editor config">📋 Config</button>
+            <button class="btn btn-ghost btn-sm onlyoffice-close-btn" id="oo-close">✕ Close</button>
+          </div>
+        </div>
+        <div class="onlyoffice-body">
+          <div class="onlyoffice-placeholder">
+            <div class="onlyoffice-placeholder-icon">${ICON_SVG.draft}</div>
+            <h3>ONLYOFFICE Editor</h3>
+            <p>The editor requires a running ONLYOFFICE Document Server.<br/>
+               Connect your server URL in backend settings to enable live editing.</p>
+            <div class="onlyoffice-config-preview">
+              <div class="onlyoffice-config-label">Editor Configuration</div>
+              <pre class="onlyoffice-config-json">${esc(JSON.stringify(editorConfig, null, 2))}</pre>
+            </div>
+            <div class="onlyoffice-placeholder-actions">
+              <button class="btn btn-primary btn-sm" id="oo-download-btn">Download DOCX</button>
+              <button class="btn btn-ghost btn-sm" id="oo-copy-json">Copy Config JSON</button>
+            </div>
+          </div>
+          <div id="onlyoffice-editor-frame" class="onlyoffice-frame"></div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => overlay.classList.add('visible'));
+    });
+
+    const closeEditor = () => {
+      overlay.classList.remove('visible');
+      setTimeout(() => {
+        overlay.remove();
+        loadDrafts(empId);
+      }, 300);
+    };
+
+    overlay.querySelector('#oo-close').addEventListener('click', closeEditor);
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeEditor(); });
+    document.addEventListener('keydown', function escKey(e) {
+      if (e.key === 'Escape') { closeEditor(); document.removeEventListener('keydown', escKey); }
+    });
+
+    overlay.querySelector('#oo-download-btn')?.addEventListener('click', () => {
+      const sourceUrl = editorConfig?.document?.url;
+      if (sourceUrl) {
+        const a = document.createElement('a');
+        a.href = sourceUrl;
+        a.download = draft.file_name || `${draftId}.docx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+    });
+
+    const copyConfig = () => {
+      navigator.clipboard.writeText(JSON.stringify(editorConfig, null, 2))
+        .then(() => showToast('Config copied to clipboard', 'success'))
+        .catch(() => showToast('Copy failed', 'error'));
+    };
+    overlay.querySelector('#oo-copy-config')?.addEventListener('click', copyConfig);
+    overlay.querySelector('#oo-copy-json')?.addEventListener('click', copyConfig);
+
+    // If ONLYOFFICE Document Server is configured, try to initialize the editor
+    if (window.DocsAPI && editorConfig) {
+      const frameEl = overlay.querySelector('#onlyoffice-editor-frame');
+      const placeholder = overlay.querySelector('.onlyoffice-placeholder');
+      if (placeholder) placeholder.style.display = 'none';
+      if (frameEl) frameEl.style.display = 'block';
+
+      console.log('[ONLYOFFICE] Initializing editor with config:', JSON.stringify(editorConfig, null, 2));
+      new window.DocsAPI.DocEditor('onlyoffice-editor-frame', editorConfig);
+    }
+  } catch (err) {
+    showToast(`Editor error: ${err.message}`, 'error');
+  }
 }
