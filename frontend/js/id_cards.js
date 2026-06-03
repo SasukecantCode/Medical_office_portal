@@ -3,7 +3,7 @@
    ═══════════════════════════════════════════════════════ */
 
 import { api } from './api.js';
-import { showToast } from './animations.js';
+import { showToast, showPageLoadingOverlay, hidePageLoadingOverlay } from './animations.js';
 import { hydrateStaffPhotos, resolveStaffPhotoObjectUrl, staffAvatarHtml } from './staff.js';
 
 // --- Utility Functions ---
@@ -92,7 +92,7 @@ export async function renderIdCardsPage(container) {
   searchInput.addEventListener('input', (e) => {
     clearTimeout(searchTimer);
     const val = e.target.value.trim();
-    if (val.length < 2) {
+    if (val.length < 1) {
       dropdown.style.display = 'none';
       return;
     }
@@ -112,20 +112,25 @@ export async function renderIdCardsPage(container) {
               </div>
             `).join('');
         }
-        await hydrateStaffPhotos(dropdown);
         dropdown.style.display = 'block';
+        hydrateStaffPhotos(dropdown).catch(console.error);
       } catch (err) {
         console.error(err);
       }
-    }, 300);
+    }, 100);
   });
 
-  // Hide dropdown on outside click
-  document.addEventListener('click', (e) => {
+  // Hide dropdown on outside click — use AbortController to prevent ghost handlers
+  // when navigating away and back to this page.
+  if (window.__idcardOutsideClickAC) {
+    window.__idcardOutsideClickAC.abort();
+  }
+  window.__idcardOutsideClickAC = new AbortController();
+  document.addEventListener('mousedown', (e) => {
     if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
       dropdown.style.display = 'none';
     }
-  });
+  }, { signal: window.__idcardOutsideClickAC.signal });
 
   dropdown.addEventListener('click', async (e) => {
     const item = e.target.closest('.autocomplete-item');
@@ -315,10 +320,9 @@ function renderEditorSections(draft, fieldDefs = []) {
     });
   }
 
-  const extraData = getExtraData(draft);
-  Object.keys(extraData)
-    .filter((key) => !extraFields.some(([fieldKey]) => fieldKey === `extra.${key}`))
-    .forEach((key) => extraFields.push([`extra.${key}`, key]));
+  // We deliberately do NOT loop over all keys in extraData here anymore.
+  // This prevents irrelevant backend metadata (like old DOB fields, created dates, 
+  // or document links) from cluttering the ID Card editor form.
 
   if (extraFields.length) {
     groups.push({
@@ -569,14 +573,16 @@ async function printIdCard() {
   
   if (!draft) return;
 
-  const photoSrc = await resolveStaffPhotoObjectUrl(draft);
-  const frontHtml = generateIdCardFront(draft, photoSrc);
-  const backHtml = generateIdCardBack(draft, fieldDefs);
+  showPageLoadingOverlay();
+  try {
+    const photoSrc = await resolveStaffPhotoObjectUrl(draft);
+    const frontHtml = generateIdCardFront(draft, photoSrc);
+    const backHtml = generateIdCardBack(draft, fieldDefs);
 
-  const printWindow = window.open('', '_blank');
-  
-  // Create a print-friendly document
-  printWindow.document.write(`
+    const printWindow = window.open('', '_blank');
+    
+    // Create a print-friendly document
+    printWindow.document.write(`
     <html>
       <head>
         <title>Print ID Card</title>
@@ -602,8 +608,8 @@ async function printIdCard() {
           }
 
           .idc-card {
-            width: 86mm; /* Standard ID card size */
-            height: 54mm;
+            width: 96mm;
+            height: 62mm;
             border: 2px solid #002b80;
             border-radius: 4px;
             box-sizing: border-box;
@@ -645,7 +651,10 @@ async function printIdCard() {
       </body>
     </html>
   `);
-  printWindow.document.close();
+    printWindow.document.close();
+  } finally {
+    hidePageLoadingOverlay();
+  }
 }
 
 window.printIdCard = printIdCard;
@@ -653,12 +662,17 @@ window.printIdCard = printIdCard;
 import html2canvas from 'html2canvas';
 import JSZip from 'jszip';
 
-/** Styles for off-screen html2canvas capture (print uses native layout). */
+/** Styles for off-screen html2canvas capture (print uses native layout).
+ *  html2canvas has known issues with:
+ *  - ::after pseudo-elements (mispositioned underlines)
+ *  - flex-wrap causing labels to wrap and overlap
+ *  So we only override those specific things here.
+ */
 function getIdCardExportStyles() {
   return `
     .html2canvas-wrapper .idc-card {
-      width: 86mm !important;
-      height: 54mm !important;
+      width: 96mm !important;
+      height: 62mm !important;
       border: 2px solid #002b80 !important;
       border-radius: 4px !important;
       box-sizing: border-box !important;
@@ -670,29 +684,37 @@ function getIdCardExportStyles() {
       padding: 2px !important;
       box-shadow: none !important;
       margin: 0 !important;
+      cursor: default !important;
     }
-    .html2canvas-wrapper .idc-vertical-text span {
-      width: 50mm !important;
+    .html2canvas-wrapper .idc-card:hover {
+      transform: none !important;
+      box-shadow: none !important;
     }
-    .html2canvas-wrapper .idc-field {
-      align-items: flex-end !important;
+
+    /* ── Fix 1: Replace ::after underlines with direct border-bottom ──
+       html2canvas mispositions ::after pseudo-elements, causing double/overlapping lines */
+    .html2canvas-wrapper .idc-line::after {
+      display: none !important;
+      content: none !important;
     }
     .html2canvas-wrapper .idc-line {
-      display: block !important;
-      border-bottom: none !important;
-      padding-bottom: 0 !important;
-      line-height: 1.2 !important;
-      min-height: 9px !important;
-    }
-    .html2canvas-wrapper .idc-line::after {
-      content: '' !important;
-      display: block !important;
-      width: 100% !important;
-      margin-top: 2px !important;
       border-bottom: 1px solid #002b80 !important;
+      padding-bottom: 4px !important;
+      margin-top: 2px !important;
+      display: inline-block !important;
+      width: 100% !important;
     }
-    .html2canvas-wrapper .idc-custom-grid .idc-line::after {
-      margin-top: 1px !important;
+
+    /* ── Fix 2: Prevent label wrapping that causes vertical overflow ──
+       "Employment Type:" etc. wrap to 2 lines and push everything down */
+    .html2canvas-wrapper .idc-field {
+      flex-wrap: nowrap !important;
+      align-items: flex-end !important;
+    }
+    .html2canvas-wrapper .idc-f-lbl {
+      white-space: nowrap !important;
+      max-width: none !important;
+      padding-bottom: 2px !important;
     }
   `;
 }
@@ -747,6 +769,8 @@ window.downloadIdCardJpeg = async function() {
   
   if (!draft) return;
 
+  showPageLoadingOverlay();
+
   const photoSrc = await resolveStaffPhotoObjectUrl(draft);
   const frontHtml = generateIdCardFront(draft, photoSrc);
   const backHtml = generateIdCardBack(draft, fieldDefs);
@@ -781,6 +805,7 @@ window.downloadIdCardJpeg = async function() {
     console.error("Failed to generate JPEG:", err);
   } finally {
     container.remove();
+    hidePageLoadingOverlay();
   }
 };
 

@@ -233,11 +233,24 @@ export function initExportDropdown(root, onExport) {
 
   const runExport = async (format) => {
     close();
+    showPageLoadingOverlay(`
+      <div class="loading-flip-container">
+        <div class="loading-flip-title">PREPARING EXPORT</div>
+        <div class="loading-flip-words">
+          <div class="loading-flip-word">Compiling staff records...</div>
+          <div class="loading-flip-word">Segregating data fields...</div>
+          <div class="loading-flip-word">Formatting columns...</div>
+          <div class="loading-flip-word">Generating ${format.toUpperCase()} file...</div>
+        </div>
+      </div>
+    `);
     try {
       await onExport(format);
       showToast(`Staff export (${format.toUpperCase()}) downloaded`, 'success');
     } catch (err) {
       showToast(err?.message || 'Export failed', 'error');
+    } finally {
+      hidePageLoadingOverlay();
     }
   };
 
@@ -283,10 +296,11 @@ export function initExportDropdown(root, onExport) {
 
 const PAGE_LOAD_MIN_MS = 550;
 
-function pageLoadingMarkup() {
+function pageLoadingMarkup(messageHtml = null) {
   return `
     <div class="page-loading-shell" role="status" aria-live="polite" aria-busy="true" aria-label="Loading">
       <div class="page-loader" aria-hidden="true"></div>
+      ${messageHtml ? `<div class="page-loading-message">${messageHtml}</div>` : ''}
     </div>
   `;
 }
@@ -294,9 +308,9 @@ function pageLoadingMarkup() {
 /**
  * Full-page loading markup inside main-body (fallback).
  */
-export function setPageLoadingShell(container) {
+export function setPageLoadingShell(container, messageHtml = null) {
   if (!container) return;
-  container.innerHTML = pageLoadingMarkup();
+  container.innerHTML = pageLoadingMarkup(messageHtml);
 }
 
 let pageLoadingOverlayEl = null;
@@ -309,10 +323,10 @@ function getPageLoadingOverlay() {
 }
 
 /** Fixed overlay — stays visible while render() replaces main-body. */
-export function showPageLoadingOverlay() {
+export function showPageLoadingOverlay(messageHtml = null) {
   const overlay = getPageLoadingOverlay();
   if (!overlay) return;
-  overlay.innerHTML = pageLoadingMarkup();
+  overlay.innerHTML = pageLoadingMarkup(messageHtml);
   overlay.hidden = false;
   overlay.setAttribute('aria-hidden', 'false');
   overlay.classList.add('is-visible');

@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════
    Document Vault — Profile-based file manager
    ═══════════════════════════════════════════════════════ */
-import { api } from './api.js';
+import { api, getAuthHeaders } from './api.js';
 import { showToast } from './animations.js';
 import { applyStaffPhotoToElement } from './staff.js';
 
@@ -248,7 +248,7 @@ function buildTable(docs, empId, showCategory) {
       <td class="vault-file-date">${fmtDate(d.updated_at)}</td>
       <td>
         <div class="vault-row-actions">
-          <a class="vault-action-btn download" href="${escA(api.downloadDocumentUrl(empId, d.file_path))}" download title="Download">${ICON_SVG.download}</a>
+          <button class="vault-action-btn download" data-action="download" title="Download">${ICON_SVG.download}</button>
           <button class="vault-action-btn rename" data-action="rename" title="Rename">${ICON_SVG.rename}</button>
           <button class="vault-action-btn delete" data-action="delete" title="Delete">${ICON_SVG.trash}</button>
         </div>
@@ -267,38 +267,38 @@ function buildTable(docs, empId, showCategory) {
   </table>`;
 }
 
-function openPreviewModal(url, filename) {
-  const ext = (filename || '').split('.').pop().toLowerCase();
-  
-  let content = '';
-  let showLoader = false;
-  if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
-    content = `<img src="${escA(url)}" class="preview-media" alt="${escA(filename)}" onload="const l = this.parentElement.querySelector('.vault-preview-loader'); if(l) l.style.display='none'" />`;
-    showLoader = true;
-  } else if (ext === 'pdf') {
-    // Use <object> as primary (better PDF support) with <iframe> as fallback inside it
-    content = `
-      <object data="${escA(url)}" type="application/pdf" class="preview-media preview-pdf" id="pdf-object-viewer">
-        <iframe src="${escA(url)}" class="preview-media preview-pdf" id="pdf-iframe-fallback"></iframe>
-      </object>
-      <div class="preview-pdf-error" id="pdf-error-msg" style="display:none">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
-          <polyline points="13 2 13 9 20 9"/>
-          <path d="M10 12l4 4m0-4l-4 4"/>
-        </svg>
-        <p>Unable to render PDF inline</p>
-        <a href="${escA(url)}" target="_blank" class="btn btn-primary btn-sm">Open in New Tab</a>
-      </div>`;
-    showLoader = true;
-  } else {
-    content = `<div class="preview-unsupported">
-      ${ICON_SVG.empty}
-      <p>Preview not available for .${esc(ext)} files</p>
-      <a href="${escA(url)}" download class="btn btn-primary">Download File</a>
-    </div>`;
-  }
+/**
+ * Fetch a document with auth headers and return a blob URL.
+ * This is necessary because <object>/<iframe>/<img> tags cannot send
+ * Authorization headers, so we fetch via JS and create a local blob URL.
+ */
+async function fetchAuthenticatedBlobUrl(apiUrl) {
+  const res = await fetch(apiUrl, { headers: getAuthHeaders() });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
 
+/** Trigger a download for a file behind auth. */
+async function downloadWithAuth(apiUrl, filename) {
+  try {
+    const blobUrl = await fetchAuthenticatedBlobUrl(apiUrl);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  } catch (err) {
+    showToast(`Download failed: ${err.message}`, 'error');
+  }
+}
+
+async function openPreviewModal(apiUrl, filename) {
+  const ext = (filename || '').split('.').pop().toLowerCase();
+
+  // Build the overlay with a loader immediately
   const overlay = document.createElement('div');
   overlay.className = 'vault-preview-overlay';
   overlay.innerHTML = `
@@ -306,60 +306,119 @@ function openPreviewModal(url, filename) {
       <div class="vault-preview-header">
         <h3 title="${escA(filename)}">${esc(filename)}</h3>
         <div class="vault-preview-header-actions">
-          <a href="${escA(url)}" target="_blank" class="vault-preview-open-btn" title="Open in new tab">
+          <button class="vault-preview-open-btn" id="vault-preview-newtab" title="Open in new tab">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-          </a>
-          <a href="${escA(url)}" download="${escA(filename)}" class="vault-preview-download-btn" title="Download">
+          </button>
+          <button class="vault-preview-download-btn" id="vault-preview-dl" title="Download">
             ${ICON_SVG.download}
-          </a>
+          </button>
           <button class="vault-preview-close">&times;</button>
         </div>
       </div>
       <div class="vault-preview-body">
-        ${showLoader ? `<div class="vault-preview-loader"><div class="vault-spinner"></div></div>` : ''}
-        ${content}
+        <div class="vault-preview-loader"><div class="vault-spinner"></div></div>
       </div>
     </div>
   `;
 
   document.body.appendChild(overlay);
 
-  // For PDF: detect load and hide loader, or show error after timeout
-  if (ext === 'pdf') {
-    const objEl = overlay.querySelector('#pdf-object-viewer');
-    const errorEl = overlay.querySelector('#pdf-error-msg');
-    const loader = overlay.querySelector('.vault-preview-loader');
-
-    // Hide loader once object loads
-    if (objEl) {
-      objEl.addEventListener('load', () => {
-        if (loader) loader.style.display = 'none';
-      });
-    }
-
-    // Safety timeout: if PDF hasn't rendered after 8s, hide loader
-    setTimeout(() => {
-      if (loader) loader.style.display = 'none';
-    }, 8000);
-  }
-
-  // Trigger reflow for animation
+  // Animate in
   requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      overlay.classList.add('visible');
-    });
+    requestAnimationFrame(() => overlay.classList.add('visible'));
   });
 
   const closeBtn = overlay.querySelector('.vault-preview-close');
+  const bodyEl = overlay.querySelector('.vault-preview-body');
+  let _blobUrl = null;
+
   const close = () => {
     overlay.classList.remove('visible');
-    setTimeout(() => overlay.remove(), 300);
+    setTimeout(() => {
+      overlay.remove();
+      if (_blobUrl) URL.revokeObjectURL(_blobUrl);
+    }, 300);
   };
 
   closeBtn.addEventListener('click', close);
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) close();
   });
+  document.addEventListener('keydown', function escHandler(e) {
+    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escHandler); }
+  });
+
+  // Wire "Open in new tab" and "Download" buttons
+  overlay.querySelector('#vault-preview-newtab').addEventListener('click', async () => {
+    try {
+      const url = _blobUrl || await fetchAuthenticatedBlobUrl(apiUrl);
+      window.open(url, '_blank');
+    } catch { showToast('Failed to open file', 'error'); }
+  });
+  overlay.querySelector('#vault-preview-dl').addEventListener('click', () => {
+    downloadWithAuth(apiUrl, filename);
+  });
+
+  // Fetch the file content with auth
+  try {
+    const res = await fetch(apiUrl, { headers: getAuthHeaders() });
+    if (!res.ok) {
+      let errDetail = `HTTP ${res.status}`;
+      try { const j = await res.json(); errDetail = j.detail || errDetail; } catch { /* ignore */ }
+      throw new Error(errDetail);
+    }
+    const blob = await res.blob();
+    _blobUrl = URL.createObjectURL(blob);
+  } catch (err) {
+    bodyEl.innerHTML = `<div class="preview-unsupported">
+      ${ICON_SVG.empty}
+      <p>Failed to load file: ${esc(err.message)}</p>
+      <button class="btn btn-primary btn-sm" id="vault-preview-retry">Retry</button>
+    </div>`;
+    bodyEl.querySelector('#vault-preview-retry')?.addEventListener('click', () => {
+      close();
+      openPreviewModal(apiUrl, filename);
+    });
+    return;
+  }
+
+  // Render content using the blob URL
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
+    const img = document.createElement('img');
+    img.className = 'preview-media';
+    img.alt = filename;
+    bodyEl.innerHTML = '';
+    bodyEl.appendChild(img);
+
+    img.onload = () => { /* rendered OK */ };
+    img.onerror = () => {
+      bodyEl.innerHTML = `<div class="preview-unsupported">
+        ${ICON_SVG.empty}
+        <p>Image failed to render</p>
+        <button class="btn btn-primary btn-sm" id="vault-preview-open-fallback">Open in New Tab</button>
+      </div>`;
+      bodyEl.querySelector('#vault-preview-open-fallback')?.addEventListener('click', () => {
+        window.open(_blobUrl, '_blank');
+      });
+    };
+    img.src = _blobUrl;
+
+  } else if (ext === 'pdf') {
+    bodyEl.innerHTML = `
+      <object data="${escA(_blobUrl)}" type="application/pdf" class="preview-media preview-pdf">
+        <iframe src="${escA(_blobUrl)}" class="preview-media preview-pdf"></iframe>
+      </object>`;
+
+  } else {
+    bodyEl.innerHTML = `<div class="preview-unsupported">
+      ${ICON_SVG.empty}
+      <p>Preview not available for .${esc(ext)} files</p>
+      <button class="btn btn-primary" id="vault-preview-dl-unsupported">Download File</button>
+    </div>`;
+    bodyEl.querySelector('#vault-preview-dl-unsupported')?.addEventListener('click', () => {
+      downloadWithAuth(apiUrl, filename);
+    });
+  }
 }
 
 function wireRowActions(listEl, empId) {
@@ -369,8 +428,18 @@ function wireRowActions(listEl, empId) {
       const path = row.dataset.path;
       const nameSpan = row.querySelector('.vault-file-name');
       const filename = nameSpan.textContent;
-      const url = api.downloadDocumentUrl(empId, path);
-      openPreviewModal(url, filename);
+      const apiUrl = api.downloadDocumentUrl(empId, path);
+      openPreviewModal(apiUrl, filename);
+    });
+  });
+
+  listEl.querySelectorAll('[data-action="download"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const row = btn.closest('tr');
+      const path = row.dataset.path;
+      const filename = path.split('/').pop();
+      const apiUrl = api.downloadDocumentUrl(empId, path);
+      downloadWithAuth(apiUrl, filename);
     });
   });
 

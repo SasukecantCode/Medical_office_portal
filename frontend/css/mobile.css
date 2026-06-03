@@ -1359,9 +1359,7 @@
     overflow: auto;
   }
 
-  .preview-media,
-  object.preview-pdf,
-  iframe.preview-pdf {
+  .preview-media {
     max-width: 100%;
     max-height: 100%;
     min-height: 0;
@@ -1369,7 +1367,10 @@
 
   object.preview-pdf,
   iframe.preview-pdf {
-    min-height: 50vh;
+    max-width: 100%;
+    max-height: 100%;
+    min-height: 60vh;
+    flex: 1;
   }
 
   /* ── Attachments preview shell (staff documents UI) ── */
