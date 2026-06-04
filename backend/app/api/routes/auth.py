@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, oauth2_scheme
 from app.crud.admin_access_logs import list_admin_access_logs, record_admin_access_log
 from app.crud.auth_invites import (
     consume_invite,
@@ -53,7 +53,8 @@ from app.schemas.auth import (
     AdminInviteRead,
     AdminUserListResponse,
 )
-from app.services.auth import create_access_token
+from app.models.auth_user import AuthUser
+from app.services.auth import create_access_token, decode_access_token
 
 router = APIRouter(prefix="/auth")
 
@@ -192,7 +193,13 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/me", response_model=AuthUserRead)
-def me(current_user=Depends(get_current_user)):
+def me(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        if current_user and not current_user.is_online:
+            current_user.is_online = True
+            db.commit()
+    except Exception:
+        db.rollback()
     return _user_payload(current_user)
 
 
@@ -312,5 +319,15 @@ def revoke_admin_invite(
 
 
 @router.post("/logout", response_model=LogoutResponse)
-def logout():
+def logout(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    try:
+        payload = decode_access_token(token)
+        subject = payload.get("sub")
+        if subject and str(subject).isdigit():
+            user = get_user_by_id(db, int(subject))
+            if user:
+                user.is_online = False
+                db.commit()
+    except Exception:
+        pass
     return LogoutResponse(message="Logged out")

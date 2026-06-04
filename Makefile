@@ -1,8 +1,8 @@
 .PHONY: start backend frontend install seed-master
 
 start:
-	@echo "Starting both backend and frontend concurrently..."
-	$(MAKE) -j 2 backend frontend
+	@echo "Starting development environment (Backend, Frontend, ONLYOFFICE)..."
+	@bash scripts/start_dev.sh
 
 backend:
 	@echo "Starting backend server..."

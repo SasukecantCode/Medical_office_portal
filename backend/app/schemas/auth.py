@@ -71,6 +71,7 @@ class AuthUserRead(BaseModel):
     profile_handle: str
     is_email_verified: bool
     is_active: bool
+    is_online: bool
     created_at: datetime
     last_login_at: datetime | None = None
 

@@ -35,8 +35,8 @@ class Settings(BaseSettings):
     onlyoffice_jwt_secret: str | None = None
     onlyoffice_token_ttl_minutes: int = 60 * 24 * 7
 
-    # Public base URL for export links (falls back to request host)
-    public_base_url: str | None = None
+    # Internal URL for ONLYOFFICE callbacks (typically docker host gateway)
+    onlyoffice_callback_url: str | None = None
 
     # Authentication / registration
     registration_access_code: str = "namsai123"

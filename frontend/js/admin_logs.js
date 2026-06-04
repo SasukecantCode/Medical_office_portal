@@ -92,6 +92,10 @@ function formatWhen(value) {
 
 function userCard(user) {
   const initial = (user.full_name || user.username || '?').charAt(0).toUpperCase();
+  const statusIndicator = user.is_online 
+    ? `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#10B981; margin-right:6px; box-shadow:0 0 6px rgba(16,185,129,0.5);"></span><span style="color:#10B981; font-size:12px; font-weight:600;">Online</span>`
+    : `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#9CA3AF; margin-right:6px;"></span><span style="color:#9CA3AF; font-size:12px; font-weight:600;">Offline</span>`;
+
   return `
     <article class="glass-panel admin-user-card" data-admin-user-id="${user.id}">
       <div class="admin-user-card-header">
@@ -104,6 +108,7 @@ function userCard(user) {
       <div class="admin-user-meta">
         <span>${esc(roleLabel(user.role))}</span>
         <span>${user.is_email_verified ? 'Verified' : 'Pending'}</span>
+        <span style="display:flex; align-items:center;">${statusIndicator}</span>
       </div>
       <div class="admin-user-body">
         <div><strong>Username</strong><span>${esc(user.username)}</span></div>

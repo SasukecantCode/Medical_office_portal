@@ -144,11 +144,12 @@ async function request(url, options = {}) {
 
   if (!res.ok) {
     let errMsg;
+    const errText = await res.text();
     try {
-      const errData = await res.json();
+      const errData = JSON.parse(errText);
       errMsg = formatApiErrorDetail(errData.detail) || JSON.stringify(errData);
     } catch {
-      errMsg = await res.text();
+      errMsg = errText;
     }
     throw new Error(errMsg || `HTTP ${res.status}`);
   }
@@ -276,11 +277,11 @@ export const api = {
     const res = await fetch(exportUrl, { headers: getAuthHeaders() });
     if (!res.ok) {
       let errMsg = `Export failed (HTTP ${res.status})`;
+      const text = await res.text();
       try {
-        const data = await res.json();
+        const data = JSON.parse(text);
         errMsg = data.detail || errMsg;
       } catch {
-        const text = await res.text();
         if (text) errMsg = text;
       }
       throw new Error(errMsg);
@@ -362,7 +363,8 @@ export const api = {
 
     if (!res.ok) {
       let errMsg;
-      try { const d = await res.json(); errMsg = d.detail || JSON.stringify(d); } catch { errMsg = await res.text(); }
+      const text = await res.text();
+      try { const d = JSON.parse(text); errMsg = d.detail || JSON.stringify(d); } catch { errMsg = text; }
       throw new Error(errMsg || `Upload failed: HTTP ${res.status}`);
     }
     return res.json();
@@ -415,6 +417,12 @@ export const api = {
       method: 'DELETE',
     }),
 
+  renameDraft: (employeeId, draftId, newTitle) =>
+    request(`/documents/drafts/${encodeURIComponent(employeeId)}/${encodeURIComponent(draftId)}/rename`, {
+      method: 'PUT',
+      body: JSON.stringify({ title: newTitle }),
+    }),
+
   downloadDraftSourceUrl: (employeeId, draftId, token) => {
     const qs = new URLSearchParams({ token });
     return `${API_BASE}/documents/drafts/${encodeURIComponent(employeeId)}/${encodeURIComponent(draftId)}/source?${qs.toString()}`;
@@ -437,11 +445,12 @@ export const api = {
     });
     if (!res.ok) {
       let errMsg;
+      const text = await res.text();
       try {
-        const data = await res.json();
+        const data = JSON.parse(text);
         errMsg = formatApiErrorDetail(data.detail) || JSON.stringify(data);
       } catch {
-        errMsg = await res.text();
+        errMsg = text;
       }
       throw new Error(errMsg || `Parse failed: HTTP ${res.status}`);
     }
@@ -459,11 +468,12 @@ export const api = {
     });
     if (!res.ok) {
       let errMsg;
+      const text = await res.text();
       try {
-        const data = await res.json();
+        const data = JSON.parse(text);
         errMsg = formatApiErrorDetail(data.detail) || JSON.stringify(data);
       } catch {
-        errMsg = await res.text();
+        errMsg = text;
       }
       throw new Error(errMsg || `Import failed: HTTP ${res.status}`);
     }

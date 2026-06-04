@@ -600,6 +600,9 @@ async function loadDrafts(empId) {
           <button class="draft-action-btn draft-action-edit" data-action="open-editor" title="Open in Editor">
             ${ICON_SVG.edit}
           </button>
+          <button class="draft-action-btn draft-action-rename" data-action="rename-draft" title="Rename Draft">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          </button>
           <button class="draft-action-btn draft-action-download" data-action="download-draft" title="Download DOCX">
             ${ICON_SVG.download}
           </button>
@@ -630,6 +633,26 @@ function wireDraftActions(listEl, empId) {
     });
   });
 
+  listEl.querySelectorAll('[data-action="rename-draft"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const item = btn.closest('.draft-item');
+      const draftId = item.dataset.draftId;
+      const empIdVal = item.dataset.empId;
+      const currentTitle = item.querySelector('.draft-item-title')?.textContent || 'Untitled Draft';
+      
+      const newTitle = prompt('Enter new document name:', currentTitle);
+      if (!newTitle || newTitle.trim() === '' || newTitle === currentTitle) return;
+      
+      try {
+        await api.renameDraft(empIdVal, draftId, newTitle.trim());
+        showToast('Draft renamed successfully', 'success');
+        loadDrafts(empId);
+      } catch (err) {
+        showToast(`Rename failed: ${err.message}`, 'error');
+      }
+    });
+  });
+
   listEl.querySelectorAll('[data-action="download-draft"]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const item = btn.closest('.draft-item');
@@ -637,17 +660,16 @@ function wireDraftActions(listEl, empId) {
       const empIdVal = item.dataset.empId;
       try {
         const config = await api.getDraftConfig(empIdVal, draftId);
-        const sourceUrl = config.editor_config?.document?.url;
-        if (sourceUrl) {
-          const a = document.createElement('a');
-          a.href = sourceUrl;
-          a.download = config.draft?.file_name || `${draftId}.docx`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-        } else {
-          showToast('Could not get download URL', 'error');
-        }
+        // Instead of using editorConfig.document.url which may be an internal Docker URL,
+        // construct the download URL using the same endpoint
+        const tokenMatch = config.editor_config?.document?.url?.match(/token=([^&]+)/);
+        const tokenStr = tokenMatch ? `?token=${tokenMatch[1]}` : '';
+        const a = document.createElement('a');
+        a.href = `/api/documents/drafts/${empIdVal}/${draftId}/source${tokenStr}`;
+        a.download = config.draft?.file_name || `${draftId}.docx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
       } catch (err) {
         showToast(`Download failed: ${err.message}`, 'error');
       }
@@ -694,7 +716,6 @@ export async function openOnlyOfficeEditor(empId, draftId) {
             </div>
           </div>
           <div class="onlyoffice-header-actions">
-            <button class="btn btn-ghost btn-sm" id="oo-copy-config" title="Copy editor config">📋 Config</button>
             <button class="btn btn-ghost btn-sm onlyoffice-close-btn" id="oo-close">✕ Close</button>
           </div>
         </div>
@@ -738,15 +759,14 @@ export async function openOnlyOfficeEditor(empId, draftId) {
     });
 
     overlay.querySelector('#oo-download-btn')?.addEventListener('click', () => {
-      const sourceUrl = editorConfig?.document?.url;
-      if (sourceUrl) {
-        const a = document.createElement('a');
-        a.href = sourceUrl;
-        a.download = draft.file_name || `${draftId}.docx`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      }
+      const tokenMatch = editorConfig?.document?.url?.match(/token=([^&]+)/);
+      const tokenStr = tokenMatch ? `?token=${tokenMatch[1]}` : '';
+      const a = document.createElement('a');
+      a.href = `/api/documents/drafts/${empId}/${draftId}/source${tokenStr}`;
+      a.download = draft.file_name || `${draftId}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
     });
 
     const copyConfig = () => {
@@ -754,18 +774,31 @@ export async function openOnlyOfficeEditor(empId, draftId) {
         .then(() => showToast('Config copied to clipboard', 'success'))
         .catch(() => showToast('Copy failed', 'error'));
     };
-    overlay.querySelector('#oo-copy-config')?.addEventListener('click', copyConfig);
     overlay.querySelector('#oo-copy-json')?.addEventListener('click', copyConfig);
 
-    // If ONLYOFFICE Document Server is configured, try to initialize the editor
-    if (window.DocsAPI && editorConfig) {
-      const frameEl = overlay.querySelector('#onlyoffice-editor-frame');
-      const placeholder = overlay.querySelector('.onlyoffice-placeholder');
-      if (placeholder) placeholder.style.display = 'none';
-      if (frameEl) frameEl.style.display = 'block';
+    // If ONLYOFFICE Document Server is configured, dynamically load its API script
+    const documentServerUrl = data.document_server_url;
+    if (documentServerUrl && editorConfig) {
+      if (!window.DocsAPI) {
+        showToast('Initializing Document Server connection…', 'info', 2000);
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = `${documentServerUrl}/web-apps/apps/api/documents/api.js`;
+          script.onload = resolve;
+          script.onerror = () => reject(new Error('Failed to load Document Server API from ' + documentServerUrl));
+          document.head.appendChild(script);
+        });
+      }
 
-      console.log('[ONLYOFFICE] Initializing editor with config:', JSON.stringify(editorConfig, null, 2));
-      new window.DocsAPI.DocEditor('onlyoffice-editor-frame', editorConfig);
+      if (window.DocsAPI) {
+        const frameEl = overlay.querySelector('#onlyoffice-editor-frame');
+        const placeholder = overlay.querySelector('.onlyoffice-placeholder');
+        if (placeholder) placeholder.style.display = 'none';
+        if (frameEl) frameEl.style.display = 'block';
+
+        console.log('[ONLYOFFICE] Initializing editor with config:', JSON.stringify(editorConfig, null, 2));
+        new window.DocsAPI.DocEditor('onlyoffice-editor-frame', editorConfig);
+      }
     }
   } catch (err) {
     showToast(`Editor error: ${err.message}`, 'error');

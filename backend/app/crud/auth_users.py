@@ -145,6 +145,7 @@ def verify_signup_otp(db: Session, user: AuthUser, otp_code: str) -> bool:
 
 def update_last_login(db: Session, user: AuthUser) -> AuthUser:
     user.last_login_at = datetime.now(timezone.utc)
+    user.is_online = True
     db.add(user)
     db.commit()
     db.refresh(user)

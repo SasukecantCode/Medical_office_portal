@@ -32,6 +32,7 @@ class AuthUser(Base):
 
     is_email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("0"))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("0"))
+    is_online: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("0"))
 
     otp_code_hash: Mapped[str] = mapped_column(String(255), nullable=True)
     otp_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)

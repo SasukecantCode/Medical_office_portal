@@ -577,16 +577,19 @@ class LocalDocumentStorageService:
 
 @lru_cache
 def get_document_storage_service():
+    import logging
     try:
-        service = GCSDocumentStorageService(settings.gcs_bucket_name)
-        # Verify connection by checking if bucket exists
-        if not service.bucket.exists():
-            raise ValueError(f"GCS Bucket '{settings.gcs_bucket_name}' does not exist or is inaccessible.")
-        return service
+        if settings.gcs_bucket_name:
+            service = GCSDocumentStorageService(settings.gcs_bucket_name)
+            # Verify connection by checking if bucket exists
+            if not service.bucket.exists():
+                raise ValueError(f"GCS Bucket '{settings.gcs_bucket_name}' does not exist or is inaccessible.")
+            return service
     except Exception as e:
-        import logging
-        logging.error(f"FATAL: Failed to connect to Google Cloud Storage: {e}")
-        raise RuntimeError("Google Cloud Storage connection failed. Document Vault requires a valid GCS connection.") from e
+        logging.warning(f"Failed to connect to Google Cloud Storage: {e}. Falling back to LocalDocumentStorageService.")
+    
+    # Fallback to local storage
+    return LocalDocumentStorageService(settings.uploads_dir)
 
 
 def _sanitize_filename(filename: str) -> str:

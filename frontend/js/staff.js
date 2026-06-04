@@ -223,7 +223,14 @@ async function showProfileCard(staffId) {
           <div class="row-actions">
             <button class="btn-edit" data-action="edit" data-id="${s.id}">Edit Profile</button>
             <button class="btn-attach" data-action="attach" data-id="${s.id}" data-name="${escAttr(s.full_name)}">Files</button>
-            <button class="btn-word" data-action="word" data-id="${s.id}" data-name="${escAttr(s.full_name)}">Word</button>
+            <button class="btn-word" data-action="word" data-id="${s.id}" data-name="${escAttr(s.full_name)}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px; vertical-align:middle;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+              Staff Correspondence File
+            </button>
+            <button class="btn-notesheet" data-action="notesheet" data-id="${s.id}" data-name="${escAttr(s.full_name)}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px; vertical-align:middle;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+              Notesheet
+            </button>
             <button class="btn-delete" data-action="delete" data-id="${s.id}" data-name="${escAttr(s.full_name)}">Delete</button>
           </div>
         </div>
@@ -279,9 +286,10 @@ async function handleRowAction(e) {
     let staffData = {};
     try { staffData = await api.getStaff(id); } catch { /* ok */ }
     window._navigateTo('attachments', { staffId: id, staffName: name, staffData });
-  } else if (action === 'word') {
+  } else if (action === 'word' || action === 'notesheet') {
+    const docTitle = action === 'word' ? 'Staff Correspondence File' : 'Notesheet';
     try {
-      showToast('Opening employee document...', 'info', 2000);
+      showToast(`Opening ${docTitle}...`, 'info', 2000);
       // Determine employee dynamically
       const safeName = (name || 'Unknown').replace(/[^a-zA-Z0-9_\-\s]/g, '').trim().replace(/\s+/g, '_');
       const empIdRaw = `EMP${String(id).padStart(3, '0')}`;
@@ -290,9 +298,15 @@ async function handleRowAction(e) {
       const data = await api.listDrafts(empId);
       let draftId;
       if (data && data.drafts && data.drafts.length > 0) {
-        draftId = data.drafts[0].draft_id;
-      } else {
-        const title = 'Employee Document';
+        // Look for existing draft by title
+        const existingDraft = data.drafts.find(d => d.title === docTitle);
+        if (existingDraft) {
+          draftId = existingDraft.draft_id;
+        }
+      }
+      
+      if (!draftId) {
+        const title = docTitle;
         const draft = await api.createDraft(empId, title);
         draftId = draft.draft_id;
         showToast('New document created!', 'success');
