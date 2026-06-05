@@ -120,9 +120,15 @@ export async function renderVault(container, staffId, staffName, staffData) {
         </select>
       </div>
       <div class="vault-upload-card" id="vault-upload-zone">
-        ${ICON_SVG.upload}
-        <p>Drag & drop files here, or click to browse</p>
-        <div class="upload-hint">PDF, JPG, PNG, DOC • Max 10 MB per file</div>
+        <div id="vault-upload-content" style="display: flex; flex-direction: column; align-items: center;">
+          ${ICON_SVG.upload}
+          <p>Drag & drop files here, or click to browse</p>
+          <div class="upload-hint">PDF, JPG, PNG, DOC • Max 10 MB per file</div>
+        </div>
+        <div id="vault-upload-loader" style="display: none; flex-direction: column; align-items: center;">
+          <div class="vault-spinner" style="margin-bottom: 1rem;"></div>
+          <p id="vault-upload-loader-text">Uploading files...</p>
+        </div>
         <input type="file" id="vault-file-input" multiple style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" />
       </div>
     </div>
@@ -548,7 +554,20 @@ function wireRowActions(listEl, empId) {
 
 async function uploadFiles(empId, files) {
   const category = document.getElementById('vault-cat-select')?.value || 'Other';
-  for (const file of files) {
+  const uploadContent = document.getElementById('vault-upload-content');
+  const uploadLoader = document.getElementById('vault-upload-loader');
+  const loaderText = document.getElementById('vault-upload-loader-text');
+
+  if (uploadContent && uploadLoader) {
+    uploadContent.style.display = 'none';
+    uploadLoader.style.display = 'flex';
+  }
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    if (loaderText) {
+      loaderText.textContent = `Uploading ${file.name} (${i + 1} of ${files.length})...`;
+    }
     try {
       showToast(`Uploading ${file.name}...`, 'info', 2000);
       await api.uploadDocument(empId, category, file);
@@ -557,6 +576,12 @@ async function uploadFiles(empId, files) {
       showToast(`Upload failed: ${err.message}`, 'error');
     }
   }
+
+  if (uploadContent && uploadLoader) {
+    uploadContent.style.display = 'flex';
+    uploadLoader.style.display = 'none';
+  }
+
   await loadVaultFiles(empId);
 }
 

@@ -229,6 +229,11 @@ export const api = {
   // Dashboard
   dashboard: () => request('/dashboard'),
 
+  // Notifications
+  generateNotifications: () => request('/hr/notifications/generate', { method: 'POST' }),
+  getNotifications: (status) => request(`/hr/notifications?status=${status}`),
+  acknowledgeNotification: (id) => request(`/hr/notifications/${id}/acknowledge`, { method: 'PATCH' }),
+
   // HR Staff
   listStaff: (params = {}) => {
     const qs = new URLSearchParams();

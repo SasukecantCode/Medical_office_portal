@@ -7,7 +7,11 @@ import { showToast } from './animations.js';
 import { renderVault, openOnlyOfficeEditor } from './vault.js';
 
 // ── State ──
-let currentFilters = { q: '', district: '', designation: '', employment_type: '', limit: 50 };
+let currentFilters = { q: '', designation: '' };
+let currentOffset = 0;
+const PAGE_LIMIT = 45;
+let isLoadingMore = false;
+let hasMoreStaff = true;
 let editingStaffId = null;
 
 // ── SVG Icons ──
@@ -21,40 +25,51 @@ const ICONS = {
 // Staff List
 // ════════════════════════════════════════════
 export async function renderStaffList(container) {
-  container.innerHTML = `
+    container.innerHTML = `
     <div class="table-controls">
       <div class="search-box">
         ${ICONS.search}
-        <input type="text" id="staff-search" placeholder="Search by name, designation, facility..." value="${currentFilters.q}" />
+        <input type="text" id="staff-search" placeholder="Search by name, designation, posting place..." value="${currentFilters.q}" />
       </div>
-      <select class="filter-select" id="filter-district">
-        <option value="">All Districts</option>
-      </select>
       <select class="filter-select" id="filter-designation">
         <option value="">All Designations</option>
       </select>
-      <select class="filter-select" id="filter-employment">
-        <option value="">All Types</option>
-      </select>
     </div>
 
-    <div class="data-table-wrapper">
+    <div class="data-table-wrapper" style="overflow-x:auto;">
       <table class="data-table" id="staff-table">
         <thead>
           <tr>
-            <th>ID</th>
+            <th>ID Number</th>
             <th>Photo</th>
-            <th>Full Name</th>
+            <th>Name</th>
+            <th>Father's Name</th>
+            <th>Mother's Name</th>
+            <th>Sex</th>
+            <th>Age</th>
             <th>Designation</th>
-            <th>Facility</th>
-            <th>District</th>
-            <th>Employment</th>
-            <th>Phone</th>
-            <th>Created</th>
+            <th>Mode of Service</th>
+            <th>Head</th>
+            <th>Present Posting Place</th>
+            <th>Date of Birth</th>
+            <th>Appt. Order No & Dated</th>
+            <th>Date of Joining</th>
+            <th>Total Yrs in Service</th>
+            <th>Date of Retirement</th>
+            <th>1st MACP</th>
+            <th>2nd MACP</th>
+            <th>3rd MACP</th>
+            <th>Basic Pay/Salary</th>
+            <th>Permanent Address</th>
+            <th>Present Address</th>
+            <th>Contact Number</th>
+            <th>Email ID</th>
+            <th>Aadhaar No.</th>
+            <th>PAN No.</th>
           </tr>
         </thead>
         <tbody id="staff-tbody">
-          <tr><td colspan="9" style="text-align:center; padding:40px; color: var(--clr-text-subtle);">Loading...</td></tr>
+          <tr><td colspan="26" style="text-align:center; padding:40px; color: var(--clr-text-subtle);">Loading...</td></tr>
         </tbody>
       </table>
     </div>
@@ -66,68 +81,129 @@ export async function renderStaffList(container) {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
       currentFilters.q = e.target.value;
-      loadStaffTable();
+      loadStaffTable(false);
     }, 350);
   });
 
   // Filter selects
-  ['district', 'designation', 'employment'].forEach((key) => {
+  ['designation'].forEach((key) => {
     const select = document.getElementById(`filter-${key}`);
     select.addEventListener('change', (e) => {
-      const filterKey = key === 'employment' ? 'employment_type' : key;
-      currentFilters[filterKey] = e.target.value;
-      loadStaffTable();
+      currentFilters[key] = e.target.value;
+      loadStaffTable(false);
     });
   });
 
+  // Event delegation for row clicks
+  const tbody = document.getElementById('staff-tbody');
+  if (tbody) {
+    tbody.addEventListener('click', (e) => {
+      const row = e.target.closest('.staff-row');
+      if (row && row.dataset.id) {
+        showProfileCard(row.dataset.id);
+      }
+    });
+
+    // Infinite scroll listener
+    const tableContainer = tbody.closest('.table-container') || window;
+    tableContainer.addEventListener('scroll', () => {
+      const el = tableContainer === window ? document.documentElement : tableContainer;
+      // Fetch more when scrolled within 100px of bottom
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
+        if (!isLoadingMore && hasMoreStaff) {
+          loadStaffTable(true);
+        }
+      }
+    });
+  }
+
   // Load initial data + populate filters
-  await loadStaffTable();
+  await loadStaffTable(false);
   await populateFilters();
 }
 
-async function loadStaffTable() {
+async function loadStaffTable(append = false) {
   const tbody = document.getElementById('staff-tbody');
   if (!tbody) return;
 
-  try {
-    const staff = await api.listStaff(currentFilters);
+  if (!append) {
+    currentOffset = 0;
+    hasMoreStaff = true;
+    tbody.innerHTML = `<tr><td colspan="26" style="text-align:center; padding:40px; color: var(--clr-text-subtle);">Loading...</td></tr>`;
+  }
 
-    if (staff.length === 0) {
+  if (isLoadingMore || !hasMoreStaff) return;
+  isLoadingMore = true;
+
+  try {
+    const filters = { ...currentFilters, skip: currentOffset, limit: PAGE_LIMIT };
+    const staff = await api.listStaff(filters);
+
+    if (staff.length < PAGE_LIMIT) {
+      hasMoreStaff = false;
+    }
+
+    if (staff.length === 0 && !append) {
       tbody.innerHTML = `
-        <tr><td colspan="9" style="text-align:center; padding: 60px; color: var(--clr-text-subtle);">
+        <tr><td colspan="26" style="text-align:center; padding: 60px; color: var(--clr-text-subtle);">
           No staff records found. Add your first entry!
         </td></tr>
       `;
+      isLoadingMore = false;
       return;
     }
 
-    tbody.innerHTML = staff
+    const html = staff
       .map(
         (s) => `
       <tr data-id="${s.id}" style="cursor: pointer" class="staff-row">
-        <td data-label="ID">${s.id}</td>
+        <td data-label="ID Number">${escHtml(s.display_id || s.id)}</td>
         <td data-label="Photo">${staffAvatarHtml(s, 32)}</td>
-        <td data-label="Full Name"><strong>${escHtml(s.full_name)}</strong></td>
+        <td data-label="Name"><strong>${escHtml(s.full_name)}</strong></td>
+        <td data-label="Father's Name">${escHtml(s.fathers_name || '-')}</td>
+        <td data-label="Mother's Name">${escHtml(s.mothers_name || '-')}</td>
+        <td data-label="Sex">${escHtml(s.gender || '-')}</td>
+        <td data-label="Age">${s.age != null ? s.age : '-'}</td>
         <td data-label="Designation">${escHtml(s.designation || '')}</td>
-        <td data-label="Facility">${escHtml(s.facility_name || '')}</td>
-        <td data-label="District">${escHtml(s.district || '')}</td>
-        <td data-label="Employment">${escHtml(s.employment_type || '')}</td>
-        <td data-label="Phone">${escHtml(s.phone || '-')}</td>
-        <td data-label="Created">${formatDate(s.created_at)}</td>
+        <td data-label="Mode of Service">${escHtml(s.mode_of_service || '-')}</td>
+        <td data-label="Head">${escHtml(s.head || '-')}</td>
+        <td data-label="Present Posting Place">${escHtml(s.present_posting_place || '-')}</td>
+        <td data-label="Date of Birth">${formatDate(s.date_of_birth)}</td>
+        <td data-label="Appt. Order">${escHtml(s.appointment_order_no || '-')}</td>
+        <td data-label="Date of Joining">${formatDate(s.date_of_joining)}</td>
+        <td data-label="Total Yrs">${s.total_years_in_service != null ? s.total_years_in_service : '-'}</td>
+        <td data-label="Retirement">${formatDate(s.date_of_retirement)}</td>
+        <td data-label="1st MACP">${formatDate(s.first_macp)}</td>
+        <td data-label="2nd MACP">${formatDate(s.second_macp)}</td>
+        <td data-label="3rd MACP">${formatDate(s.third_macp)}</td>
+        <td data-label="Basic Pay">${escHtml(s.present_basic_pay || '-')}</td>
+        <td data-label="Permanent Address">${escHtml(s.permanent_address || '-')}</td>
+        <td data-label="Present Address">${escHtml(s.present_address || '-')}</td>
+        <td data-label="Contact">${escHtml(s.phone || '-')}</td>
+        <td data-label="Email">${escHtml(s.email || '-')}</td>
+        <td data-label="Aadhaar">${escHtml(s.aadhaar_number || '-')}</td>
+        <td data-label="PAN">${escHtml(s.pan_number || '-')}</td>
       </tr>
     `
       )
       .join('');
 
-    await hydrateStaffPhotos(tbody);
+    if (append) {
+      tbody.insertAdjacentHTML('beforeend', html);
+    } else {
+      tbody.innerHTML = html;
+    }
+    
+    currentOffset += staff.length;
 
-    // Attach row action listeners for opening profile card
-    tbody.querySelectorAll('.staff-row').forEach((row) => {
-      row.addEventListener('click', () => showProfileCard(row.dataset.id));
-    });
+    await hydrateStaffPhotos(tbody);
   } catch (err) {
     showToast(`Failed to load staff: ${err.message}`, 'error');
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:40px; color:#DC2626;">Error loading data</td></tr>`;
+    if (!append) {
+      tbody.innerHTML = `<tr><td colspan="26" style="text-align:center; padding:40px; color:#DC2626;">Error loading data</td></tr>`;
+    }
+  } finally {
+    isLoadingMore = false;
   }
 }
 
@@ -135,9 +211,7 @@ async function populateFilters() {
   try {
     const data = await api.dashboard();
 
-    populateSelect('filter-district', data.by_district);
     populateSelect('filter-designation', data.by_designation);
-    populateSelect('filter-employment', data.by_employment_type);
   } catch {
     // Filters will just stay empty — non-critical
   }
@@ -175,15 +249,30 @@ async function showProfileCard(staffId) {
     
     // Standard fields to display
     const coreFields = [
+      { label: 'ID Number', val: s.display_id },
+      { label: 'Father\'s Name', val: s.fathers_name },
+      { label: 'Mother\'s Name', val: s.mothers_name },
+      { label: 'Sex', val: s.gender },
+      { label: 'Date of Birth', val: s.date_of_birth },
+      { label: 'Age', val: s.age },
       { label: 'Designation', val: s.designation },
-      { label: 'Facility', val: s.facility_name },
-      { label: 'District', val: s.district },
-      { label: 'Cadre', val: s.cadre },
-      { label: 'Employment', val: s.employment_type },
-      { label: 'Phone', val: s.phone },
-      { label: 'Email', val: s.email },
-      { label: 'Gender', val: s.gender },
-      { label: 'DOB', val: s.date_of_birth },
+      { label: 'Mode of Service', val: s.mode_of_service },
+      { label: 'Head', val: s.head },
+      { label: 'Present Posting Place', val: s.present_posting_place },
+      { label: 'Appointment Order No & Dated', val: s.appointment_order_no },
+      { label: 'Date of Joining', val: s.date_of_joining },
+      { label: 'Total Year in Service', val: s.total_years_in_service },
+      { label: 'Date of Retirement', val: s.date_of_retirement },
+      { label: 'Date of 1st MACP', val: s.first_macp },
+      { label: 'Date of 2nd MACP', val: s.second_macp },
+      { label: 'Date of 3rd MACP', val: s.third_macp },
+      { label: 'Present Basic Pay/Salary', val: s.present_basic_pay },
+      { label: 'Permanent Address', val: s.permanent_address },
+      { label: 'Present Address', val: s.present_address },
+      { label: 'Contact Number', val: s.phone },
+      { label: 'Email ID', val: s.email },
+      { label: 'Aadhaar Card Number', val: s.aadhaar_number },
+      { label: 'PAN Card Number', val: s.pan_number },
     ];
 
     // Combine with dynamic extra fields
@@ -211,7 +300,7 @@ async function showProfileCard(staffId) {
           </div>
           <div class="profile-card-title">
             <h2>${escHtml(s.full_name)}</h2>
-            <p>${escHtml(s.designation || 'Staff Member')} • ${escHtml(s.facility_name || 'N/A')}</p>
+            <p>${escHtml(s.designation || 'Staff Member')} • ${escHtml(s.present_posting_place || 'N/A')}</p>
           </div>
         </div>
         <div class="profile-card-body">
@@ -404,7 +493,17 @@ export async function renderStaffForm(container, staffId = null) {
 
   const isEdit = !!staffId;
   const hasExistingPhoto = staffHasPhoto(staffData);
-  const photoRequired = !isEdit || !hasExistingPhoto;
+  const photoRequired = false; // Profile photo is no longer mandatory
+
+  let selectedSpan = 60;
+  if (staffData.date_of_birth && staffData.date_of_retirement) {
+    const d1 = new Date(staffData.date_of_birth);
+    const d2 = new Date(staffData.date_of_retirement);
+    const diff = d2.getFullYear() - d1.getFullYear();
+    if (diff === 62) {
+      selectedSpan = 62;
+    }
+  }
 
   container.innerHTML = `
     <div class="staff-form-container">
@@ -415,12 +514,21 @@ export async function renderStaffForm(container, staffId = null) {
       <form id="staff-form">
         <div class="staff-form-body">
           <div class="form-grid">
+            <!-- Personal Info -->
             <div class="form-group">
-              <label class="form-label">Full Name <span class="required">*</span></label>
+              <label class="form-label">Name <span class="required">*</span></label>
               <input class="form-input" name="full_name" required value="${escAttr(staffData.full_name || '')}" placeholder="Enter full name" />
             </div>
             <div class="form-group">
-              <label class="form-label">Gender</label>
+              <label class="form-label">Father's Name</label>
+              <input class="form-input" name="fathers_name" value="${escAttr(staffData.fathers_name || '')}" placeholder="Enter father's name" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Mother's Name</label>
+              <input class="form-input" name="mothers_name" value="${escAttr(staffData.mothers_name || '')}" placeholder="Enter mother's name" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Sex</label>
               <select class="form-input" name="gender">
                 <option value="">Select...</option>
                 <option ${staffData.gender === 'Male' ? 'selected' : ''}>Male</option>
@@ -432,56 +540,125 @@ export async function renderStaffForm(container, staffId = null) {
               <label class="form-label">Date of Birth</label>
               <input class="form-input" name="date_of_birth" type="date" value="${staffData.date_of_birth || ''}" />
             </div>
-            ${customFieldsHtml}
+            <div class="form-group">
+              <label class="form-label">Age</label>
+              <input class="form-input" name="age" value="${staffData.age != null ? staffData.age : ''}" readonly tabindex="-1" style="opacity:0.7; cursor:default;" />
+            </div>
+
+            <!-- Service Details -->
+            <hr class="form-section-divider form-grid-full" />
             <div class="form-group">
               <label class="form-label">Designation <span class="required">*</span></label>
               <input class="form-input" name="designation" required value="${escAttr(staffData.designation || '')}" placeholder="e.g., Doctor, Nurse" />
             </div>
             <div class="form-group">
-              <label class="form-label">Cadre</label>
-              <input class="form-input" name="cadre" value="${escAttr(staffData.cadre || '')}" placeholder="Cadre" />
+              <label class="form-label">Mode of Service</label>
+              <select class="form-input" name="mode_of_service">
+                <option value="">Select...</option>
+                <option ${staffData.mode_of_service === 'Regular' ? 'selected' : ''}>Regular</option>
+                <option ${staffData.mode_of_service === 'Contractual' ? 'selected' : ''}>Contractual</option>
+                <option ${staffData.mode_of_service === 'Contigency' ? 'selected' : ''}>Contigency</option>
+                <option ${staffData.mode_of_service === 'MLA Led' ? 'selected' : ''}>MLA Led</option>
+                <option ${staffData.mode_of_service === 'Temporary' ? 'selected' : ''}>Temporary</option>
+              </select>
             </div>
             <div class="form-group">
-              <label class="form-label">Employment Type</label>
-              <input class="form-input" name="employment_type" value="${escAttr(staffData.employment_type || '')}" placeholder="Regular / Contract / etc." />
-            </div>
-            <hr class="form-section-divider form-grid-full" />
-            <div class="form-group">
-              <label class="form-label">Phone</label>
-              <input class="form-input" name="phone" type="tel" inputmode="numeric" pattern="\+91\d*" value="${escAttr(staffData.phone || '')}" placeholder="+91XXXXXXXXXX" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Email</label>
-              <input class="form-input" name="email" type="email" value="${escAttr(staffData.email || '')}" placeholder="email@example.com" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Facility Name <span class="required">*</span></label>
-              <input class="form-input" name="facility_name" required value="${escAttr(staffData.facility_name || '')}" placeholder="e.g., PHC Namsai" />
+              <label class="form-label">Head</label>
+              <select class="form-input" name="head">
+                <option value="">Select...</option>
+                <option ${staffData.head === 'Plan' ? 'selected' : ''}>Plan</option>
+                <option ${staffData.head === 'Non Plan' ? 'selected' : ''}>Non Plan</option>
+                <option ${staffData.head === 'NHM' ? 'selected' : ''}>NHM</option>
+                <option ${staffData.head === 'IDSP' ? 'selected' : ''}>IDSP</option>
+                <option ${staffData.head === 'NVBDCP' ? 'selected' : ''}>NVBDCP</option>
+                <option ${staffData.head === 'NTEP' ? 'selected' : ''}>NTEP</option>
+                <option ${staffData.head === 'NCD' ? 'selected' : ''}>NCD</option>
+                <option ${staffData.head === 'Other' ? 'selected' : ''}>Other</option>
+              </select>
             </div>
             <div class="form-group">
-              <label class="form-label">Facility Type</label>
-              <input class="form-input" name="facility_type" value="${escAttr(staffData.facility_type || '')}" placeholder="PHC / CHC / DH / etc." />
+              <label class="form-label">Present Posting Place</label>
+              <input class="form-input" name="present_posting_place" value="${escAttr(staffData.present_posting_place || '')}" placeholder="Posting place" />
             </div>
-            <div class="form-group">
-              <label class="form-label">District <span class="required">*</span></label>
-              <input class="form-input" name="district" required value="${escAttr(staffData.district || '')}" placeholder="e.g., Namsai" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Block</label>
-              <input class="form-input" name="block" value="${escAttr(staffData.block || '')}" placeholder="Block name" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Posting Place</label>
-              <input class="form-input" name="posting_place" value="${escAttr(staffData.posting_place || '')}" placeholder="Posting place" />
+            <div class="form-group form-grid-full">
+              <label class="form-label">Appointment Order No & Dated</label>
+              <input class="form-input" name="appointment_order_no" value="${escAttr(staffData.appointment_order_no || '')}" placeholder="Order number and date" />
             </div>
             <div class="form-group">
               <label class="form-label">Date of Joining</label>
               <input class="form-input" name="date_of_joining" type="date" value="${staffData.date_of_joining || ''}" />
             </div>
+            <div class="form-group">
+              <label class="form-label">Total Year in Service</label>
+              <input class="form-input" name="total_years_in_service" value="${staffData.total_years_in_service != null ? staffData.total_years_in_service : ''}" readonly tabindex="-1" style="opacity:0.7; cursor:default;" />
+            </div>
+
+            <!-- Auto-Calculated Dates -->
+            <hr class="form-section-divider form-grid-full" />
+            <div class="form-group">
+              <label class="form-label">Span of Service</label>
+              <select class="form-input" id="form-service-span">
+                <option value="60" ${selectedSpan === 60 ? 'selected' : ''}>60 years service</option>
+                <option value="62" ${selectedSpan === 62 ? 'selected' : ''}>62 years service</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Date of Retirement</label>
+              <input class="form-input" name="date_of_retirement" type="date" value="${staffData.date_of_retirement || ''}" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Date of 1st MACP</label>
+              <input class="form-input" name="first_macp" type="date" value="${staffData.first_macp || ''}" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Date of 2nd MACP</label>
+              <input class="form-input" name="second_macp" type="date" value="${staffData.second_macp || ''}" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Date of 3rd MACP</label>
+              <input class="form-input" name="third_macp" type="date" value="${staffData.third_macp || ''}" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Present Basic Pay / Salary</label>
+              <input class="form-input" name="present_basic_pay" value="${escAttr(staffData.present_basic_pay || '')}" placeholder="e.g., 56100" />
+            </div>
+
+            <!-- Address & Contact -->
+            <hr class="form-section-divider form-grid-full" />
+            <div class="form-group form-grid-full">
+              <label class="form-label">Permanent Address</label>
+              <textarea class="form-input" name="permanent_address" rows="2" placeholder="Permanent address...">${escHtml(staffData.permanent_address || '')}</textarea>
+            </div>
+            <div class="form-group form-grid-full">
+              <label class="form-label">Present Address</label>
+              <textarea class="form-input" name="present_address" rows="2" placeholder="Present address...">${escHtml(staffData.present_address || '')}</textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Contact Number</label>
+              <input class="form-input" name="phone" type="tel" inputmode="numeric" value="${escAttr(staffData.phone || '')}" placeholder="+91XXXXXXXXXX" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email ID</label>
+              <input class="form-input" name="email" type="email" value="${escAttr(staffData.email || '')}" placeholder="email@example.com" />
+            </div>
+
+            <!-- Identity Documents -->
+            <hr class="form-section-divider form-grid-full" />
+            <div class="form-group">
+              <label class="form-label">Aadhaar Card Number</label>
+              <input class="form-input" name="aadhaar_number" value="${escAttr(staffData.aadhaar_number || '')}" placeholder="XXXX XXXX XXXX" maxlength="14" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">PAN Card Number</label>
+              <input class="form-input" name="pan_number" value="${escAttr(staffData.pan_number || '')}" placeholder="ABCDE1234F" maxlength="10" style="text-transform:uppercase;" />
+            </div>
+
+            <!-- Remarks -->
             <div class="form-group form-grid-full">
               <label class="form-label">Remarks</label>
-              <textarea class="form-input" name="remarks" rows="3" placeholder="Any additional remarks...">${escHtml(staffData.remarks || '')}</textarea>
+              <textarea class="form-input" name="remarks" rows="2" placeholder="Any additional remarks...">${escHtml(staffData.remarks || '')}</textarea>
             </div>
+            ${customFieldsHtml ? `<div class="form-group form-grid-full">${customFieldsHtml}</div>` : ''}
             <div class="form-group form-grid-full">
               <label class="form-label">Extra (JSON)</label>
               <textarea class="form-input" name="extra" rows="3" placeholder='{"key": "value"}'>${staffData.extra ? JSON.stringify(staffData.extra, null, 2) : ''}</textarea>
@@ -498,7 +675,7 @@ export async function renderStaffForm(container, staffId = null) {
                 </div>
                 <div style="flex:1; min-width: 240px;">
                   <input class="form-input" id="profile-photo" type="file" accept="image/jpeg" ${photoRequired ? 'required' : ''} />
-                  <small style="color: var(--clr-text-subtle); font-size: 11px;">JPEG only. ${isEdit ? 'Choose a file to replace the current photo.' : 'Required to create a record.'}</small>
+                  <small style="color: var(--clr-text-subtle); font-size: 11px;">JPEG only. ${isEdit ? 'Choose a file to replace the current photo.' : 'Optional.'}</small>
                 </div>
               </div>
             </div>
@@ -534,6 +711,68 @@ export async function renderStaffForm(container, staffId = null) {
   if (formPreview?.dataset.photoStaffId) {
     await hydrateStaffPhotos(formPreview);
   }
+
+  // Live auto-calculation
+  function calculateAutoFields() {
+    const form = document.getElementById('staff-form');
+    if (!form) return;
+
+    const dob = form.querySelector('[name="date_of_birth"]').value;
+    const doj = form.querySelector('[name="date_of_joining"]').value;
+    const spanSelect = form.querySelector('#form-service-span').value;
+
+    const ageField = form.querySelector('[name="age"]');
+    const totalYearsField = form.querySelector('[name="total_years_in_service"]');
+    const firstMacpField = form.querySelector('[name="first_macp"]');
+    const secondMacpField = form.querySelector('[name="second_macp"]');
+    const thirdMacpField = form.querySelector('[name="third_macp"]');
+    const retirementField = form.querySelector('[name="date_of_retirement"]');
+
+    const today = new Date();
+
+    if (dob) {
+      const d = new Date(dob);
+      let age = today.getFullYear() - d.getFullYear();
+      const m = today.getMonth() - d.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
+      ageField.value = age;
+
+      const retAge = parseInt(spanSelect, 10) || 60;
+      const retDate = new Date(d);
+      retDate.setFullYear(d.getFullYear() + retAge);
+      retirementField.value = retDate.toISOString().split('T')[0];
+    } else {
+      ageField.value = '';
+      retirementField.value = '';
+    }
+
+    if (doj) {
+      const j = new Date(doj);
+      let years = today.getFullYear() - j.getFullYear();
+      const m = today.getMonth() - j.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < j.getDate())) years--;
+      totalYearsField.value = years;
+
+      const m1 = new Date(j); m1.setFullYear(j.getFullYear() + 10);
+      firstMacpField.value = m1.toISOString().split('T')[0];
+
+      const m2 = new Date(m1); m2.setFullYear(m1.getFullYear() + 10);
+      secondMacpField.value = m2.toISOString().split('T')[0];
+
+      const m3 = new Date(m2); m3.setFullYear(m2.getFullYear() + 10);
+      thirdMacpField.value = m3.toISOString().split('T')[0];
+    } else {
+      totalYearsField.value = '';
+      firstMacpField.value = '';
+      secondMacpField.value = '';
+      thirdMacpField.value = '';
+    }
+  }
+
+  container.querySelector('[name="date_of_birth"]').addEventListener('input', calculateAutoFields);
+  container.querySelector('[name="date_of_joining"]').addEventListener('input', calculateAutoFields);
+  const spanEl = container.querySelector('#form-service-span');
+  if (spanEl) spanEl.addEventListener('change', calculateAutoFields);
 
   document.getElementById('staff-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -594,11 +833,10 @@ export async function renderStaffForm(container, staffId = null) {
         const created = await api.createStaff(payload);
 
         const photoFile = document.getElementById('profile-photo')?.files?.[0];
-        if (!photoFile) {
-          throw new Error('Profile photo (JPEG) is required');
+        if (photoFile) {
+          await api.uploadProfilePhoto(created.id, photoFile);
+          clearStaffPhotoCache();
         }
-        await api.uploadProfilePhoto(created.id, photoFile);
-        clearStaffPhotoCache();
 
         const docInput = document.getElementById('doc-files');
         const docs = docInput?.files ? Array.from(docInput.files) : [];

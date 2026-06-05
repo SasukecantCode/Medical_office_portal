@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from sqlalchemy import and_, func, or_, select, update
@@ -21,14 +21,11 @@ def _normalize_text_field(value: str) -> str:
 # Fields that should be auto-normalized to Title Case on create/update
 _TITLE_CASE_FIELDS = [
     "full_name",
+    "fathers_name",
+    "mothers_name",
     "designation",
-    "cadre",
-    "employment_type",
-    "facility_name",
-    "facility_type",
-    "district",
-    "block",
-    "posting_place",
+    "present_posting_place",
+    "head",
 ]
 
 def _apply_case_normalization(data: dict) -> dict:
@@ -37,9 +34,59 @@ def _apply_case_normalization(data: dict) -> dict:
             data[field] = _normalize_text_field(data[field])
     return data
 
+
+def _compute_macp_dates(data: dict) -> dict:
+    """Auto-calculate MACP dates from date_of_joining if not explicitly provided."""
+    doj = data.get("date_of_joining")
+    if doj and isinstance(doj, date):
+        if not data.get("first_macp"):
+            try:
+                data["first_macp"] = doj.replace(year=doj.year + 10)
+            except ValueError:
+                data["first_macp"] = doj.replace(year=doj.year + 10, day=28)
+
+        first = data.get("first_macp")
+        if first and not data.get("second_macp"):
+            try:
+                data["second_macp"] = first.replace(year=first.year + 10)
+            except ValueError:
+                data["second_macp"] = first.replace(year=first.year + 10, day=28)
+
+        second = data.get("second_macp")
+        if second and not data.get("third_macp"):
+            try:
+                data["third_macp"] = second.replace(year=second.year + 10)
+            except ValueError:
+                data["third_macp"] = second.replace(year=second.year + 10, day=28)
+    return data
+
+
+def _compute_retirement_date(data: dict) -> dict:
+    """Auto-calculate retirement date if missing (defaults to DOB + 60)."""
+    dob = data.get("date_of_birth")
+    if dob and isinstance(dob, date):
+        if not data.get("date_of_retirement"):
+            try:
+                data["date_of_retirement"] = dob.replace(year=dob.year + 60)
+            except ValueError:
+                data["date_of_retirement"] = dob.replace(year=dob.year + 60, day=28)
+    return data
+
+
+def compute_age(dob: date | None) -> int | None:
+    """Calculate age from date of birth."""
+    if not dob:
+        return None
+    today = date.today()
+    age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+    return age
+
+
 def create_staff(db: Session, payload: HRStaffCreate) -> HRStaff:
     data = payload.model_dump()
     _apply_case_normalization(data)
+    _compute_macp_dates(data)
+    _compute_retirement_date(data)
     staff = HRStaff(**data)
     db.add(staff)
     db.commit()
@@ -54,10 +101,7 @@ def get_staff(db: Session, staff_id: int) -> HRStaff | None:
 
 def _filters(
     q: Optional[str],
-    district: Optional[str],
     designation: Optional[str],
-    facility_name: Optional[str],
-    employment_type: Optional[str],
 ):
     filters = [HRStaff.deleted_at.is_(None)]
 
@@ -69,19 +113,13 @@ def _filters(
                 HRStaff.phone.ilike(like),
                 HRStaff.email.ilike(like),
                 HRStaff.designation.ilike(like),
-                HRStaff.facility_name.ilike(like),
-                HRStaff.district.ilike(like),
+                HRStaff.present_posting_place.ilike(like),
+                HRStaff.fathers_name.ilike(like),
             )
         )
 
-    if district:
-        filters.append(func.lower(func.trim(HRStaff.district)) == district.strip().lower())
     if designation:
         filters.append(HRStaff.designation == designation)
-    if facility_name:
-        filters.append(HRStaff.facility_name == facility_name)
-    if employment_type:
-        filters.append(HRStaff.employment_type == employment_type)
 
     return filters
 
@@ -99,8 +137,8 @@ def list_staff(
 ) -> list[HRStaff]:
     stmt = (
         select(HRStaff)
-        .where(and_(*_filters(q, district, designation, facility_name, employment_type)))
-        .order_by(HRStaff.created_at.desc())
+        .where(and_(*_filters(q, designation)))
+        .order_by(HRStaff.id.asc())
         .offset(skip)
         .limit(limit)
     )
@@ -116,6 +154,21 @@ def update_staff(db: Session, staff_id: int, payload: HRStaffUpdate) -> HRStaff 
 
     data = payload.model_dump(exclude_unset=True)
     _apply_case_normalization(data)
+    
+    # Recalculate MACP if DOJ changed
+    if "date_of_joining" in data:
+        _compute_macp_dates(data)
+    
+    # Recalculate retirement date if DOB changed
+    if "date_of_birth" in data:
+        merged = {
+            "date_of_birth": data.get("date_of_birth", staff.date_of_birth),
+            "date_of_retirement": data.get("date_of_retirement"),
+        }
+        _compute_retirement_date(merged)
+        if "date_of_retirement" not in data:
+            data["date_of_retirement"] = merged.get("date_of_retirement")
+
     for key, value in data.items():
         setattr(staff, key, value)
 
@@ -148,13 +201,7 @@ def update_staff(db: Session, staff_id: int, payload: HRStaffUpdate) -> HRStaff 
 
 _SUGGESTION_FIELDS = {
     "designation": HRStaff.designation,
-    "cadre": HRStaff.cadre,
-    "employment_type": HRStaff.employment_type,
-    "facility_name": HRStaff.facility_name,
-    "facility_type": HRStaff.facility_type,
-    "district": HRStaff.district,
-    "block": HRStaff.block,
-    "posting_place": HRStaff.posting_place,
+    "present_posting_place": HRStaff.present_posting_place,
 }
 
 def distinct_values(db: Session, field: str, q: Optional[str] = None, limit: int = 30) -> list[str]:
@@ -234,29 +281,47 @@ def export_staff_rows(
 ) -> list[dict]:
     stmt = (
         select(HRStaff)
-        .where(and_(*_filters(q, district, designation, facility_name, employment_type)))
+        .where(and_(*_filters(q, designation)))
         .order_by(HRStaff.created_at.desc())
     )
     results = list(db.execute(stmt).scalars().all())
 
+    def _total_years(doj):
+        if not doj:
+            return ""
+        today = date.today()
+        return today.year - doj.year - ((today.month, today.day) < (doj.month, doj.day))
+
     def to_row(s: HRStaff) -> dict:
         return {
             "id": s.id,
+            "display_id": f"NDMO/ESTT/{s.id:03d}",
             "full_name": s.full_name,
+            "fathers_name": s.fathers_name or "",
+            "mothers_name": s.mothers_name or "",
             "gender": s.gender,
             "date_of_birth": s.date_of_birth.isoformat() if s.date_of_birth else "",
+            "age": compute_age(s.date_of_birth) if s.date_of_birth else "",
             "designation": s.designation,
-            "cadre": s.cadre or "",
-            "employment_type": s.employment_type or "",
+            "mode_of_service": s.mode_of_service or "",
+            "head": s.head or "",
+            "present_posting_place": s.present_posting_place or "",
+            "appointment_order_no": s.appointment_order_no or "",
+            "date_of_joining": s.date_of_joining.isoformat() if s.date_of_joining else "",
+            "total_years_in_service": _total_years(s.date_of_joining),
+            "first_macp": s.first_macp.isoformat() if s.first_macp else "",
+            "second_macp": s.second_macp.isoformat() if s.second_macp else "",
+            "third_macp": s.third_macp.isoformat() if s.third_macp else "",
+            "date_of_retirement": s.date_of_retirement.isoformat() if s.date_of_retirement else "",
+            "present_basic_pay": s.present_basic_pay or "",
+            "present_address": s.present_address or "",
+            "permanent_address": s.permanent_address or "",
             "phone": s.phone or "",
             "email": s.email or "",
-            "facility_name": s.facility_name,
-            "facility_type": s.facility_type or "",
-            "district": s.district,
-            "block": s.block or "",
-            "posting_place": s.posting_place or "",
-            "date_of_joining": s.date_of_joining.isoformat() if s.date_of_joining else "",
+            "aadhaar_number": s.aadhaar_number or "",
+            "pan_number": s.pan_number or "",
             "remarks": s.remarks or "",
+            "profile_photo_stored_filename": s.profile_photo_stored_filename or "",
             "extra": json.dumps(s.extra or {}, ensure_ascii=False),
             "created_at": s.created_at.isoformat() if s.created_at else "",
             "updated_at": s.updated_at.isoformat() if s.updated_at else "",
@@ -314,9 +379,8 @@ def dashboard_summary(db: Session) -> dict:
     return {
         "totals": {"staff": total_staff},
         "by_designation": grouped(HRStaff.designation),
-        "by_district": grouped_case_insensitive(HRStaff.district),
-        "by_employment_type": grouped(HRStaff.employment_type),
-        "by_facility": grouped_case_insensitive(HRStaff.facility_name),
+        "by_head": grouped_case_insensitive(HRStaff.head),
+        "by_facility": grouped_case_insensitive(HRStaff.present_posting_place),
         "by_month": monthly_trend,
     }
 
