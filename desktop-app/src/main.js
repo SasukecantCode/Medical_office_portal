@@ -91,7 +91,7 @@ loginForm.addEventListener('submit', async (e) => {
   try {
     const data = await apiRequest('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ role: 'hr', username, password })
+      body: JSON.stringify({ role: 'hr', login: username, password })
     });
     authToken = data.access_token;
     localStorage.setItem('desktop_auth_token', authToken);
