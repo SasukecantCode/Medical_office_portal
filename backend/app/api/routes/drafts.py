@@ -1,34 +1,25 @@
 from __future__ import annotations
 
-import httpx
-
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from app.api.dependencies import require_roles
-from app.core.config import settings
-from app.schemas.drafts import DraftConfigRead, DraftCreateRequest, DraftListRead, DraftRead, DraftRenameRequest
+from app.schemas.drafts import DraftCreateRequest, DraftListRead, DraftRead, DraftRenameRequest
 from app.services.document_storage import (
     DOCX_MIME_TYPE,
     get_document_storage_service,
     validate_employee_id,
 )
-from app.services.onlyoffice_drafts import (
-    build_access_token,
-    build_blank_docx_bytes,
-    sign_onlyoffice_config,
-    verify_access_token,
-)
 
 router = APIRouter(prefix="/documents/drafts")
 
-
-def _base_url(request: Request) -> str:
-    return (settings.onlyoffice_callback_url or str(request.base_url)).rstrip("/")
-
-
 def _draft_to_read(draft) -> DraftRead:
     return DraftRead.model_validate(draft)
+
+def build_blank_docx_bytes(title: str) -> bytes:
+    import base64
+    valid_docx_b64 = "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"
+    return base64.b64decode(valid_docx_b64)
 
 
 from sqlalchemy.orm import Session
@@ -218,14 +209,10 @@ def get_draft(
 def draft_source(
     employee_id: str,
     draft_id: str,
-    token: str = Query(...),
+    current_user=Depends(require_roles("hr", "master")),
     storage=Depends(get_document_storage_service),
 ):
     employee_id = validate_employee_id(employee_id)
-    try:
-        verify_access_token(token, employee_id, draft_id, "source")
-    except Exception as exc:
-        raise HTTPException(status_code=403, detail="Invalid draft access token") from exc
     blob = storage.get_employee_draft_blob(employee_id, draft_id)
     if not blob:
         raise HTTPException(status_code=404, detail="Draft source file not found in storage")
@@ -245,126 +232,7 @@ def draft_source(
     return StreamingResponse(iter([content]), media_type=DOCX_MIME_TYPE, headers=headers)
 
 
-@router.get("/{employee_id}/{draft_id}/onlyoffice-config", response_model=DraftConfigRead)
-def onlyoffice_config(
-    employee_id: str,
-    draft_id: str,
-    request: Request,
-    current_user=Depends(require_roles("hr", "master")),
-    db: Session = Depends(get_db),
-):
-    employee_id = validate_employee_id(employee_id)
-    draft = crud_get_draft(db, draft_id)
-    if not draft or draft.employee_id != employee_id:
-        raise HTTPException(status_code=404, detail="Draft not found")
-    access_token = build_access_token(employee_id, draft_id, "source")
-    callback_token = build_access_token(employee_id, draft_id, "callback")
-    source_url = f"{_base_url(request)}/api/documents/drafts/{employee_id}/{draft_id}/source?token={access_token}"
-    callback_url = f"{_base_url(request)}/api/documents/drafts/{employee_id}/{draft_id}/callback?token={callback_token}"
-    current_user_name = getattr(current_user, "full_name", None) or getattr(current_user, "username", None) or "User"
-    editor_config = {
-        "documentType": "word",
-        "document": {
-            "fileType": "docx",
-            "key": draft.document_key,
-            "title": draft.file_name,
-            "url": source_url,
-            "permissions": {
-                "edit": True,
-                "download": True,
-                "print": True,
-                "copy": True,
-            },
-        },
-        "editorConfig": {
-            "mode": "edit",
-            "callbackUrl": callback_url,
-            "lang": "en",
-            "user": {
-                "id": str(getattr(current_user, "id", "0")),
-                "name": current_user_name,
-            },
-            "customization": {
-                "forcesave": True,
-            },
-        },
-    }
-    editor_config = sign_onlyoffice_config(editor_config)
-    return DraftConfigRead(
-        employee_id=employee_id, 
-        draft=_draft_to_read(draft), 
-        editor_config=editor_config,
-        document_server_url=settings.onlyoffice_document_server_url
-    )
 
-
-@router.post("/{employee_id}/{draft_id}/callback")
-async def onlyoffice_callback(
-    employee_id: str,
-    draft_id: str,
-    request: Request,
-    token: str = Query(...),
-    storage=Depends(get_document_storage_service),
-    db: Session = Depends(get_db),
-):
-    employee_id = validate_employee_id(employee_id)
-    try:
-        verify_access_token(token, employee_id, draft_id, "callback")
-    except Exception as exc:
-        raise HTTPException(status_code=403, detail="Invalid draft access token") from exc
-    payload = await request.json()
-    status = int(payload.get("status") or 0)
-    if status not in {2, 6}:
-        return {"error": 0}
-
-    url = payload.get("url")
-    if not url:
-        raise HTTPException(status_code=400, detail="ONLYOFFICE callback did not include a document URL")
-
-    async with httpx.AsyncClient(timeout=60) as client:
-        response = await client.get(url)
-        response.raise_for_status()
-        content = response.content
-
-    draft = crud_get_draft(db, draft_id)
-    if not draft or draft.employee_id != employee_id:
-        return {"error": 0}
-
-    title = payload.get("title") or draft.title
-    
-    # Store content in GCS/Local
-    if hasattr(storage, "_write_draft_content"):
-        storage._write_draft_content(employee_id, draft_id, content)
-
-    # Store metadata in DB
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    draft.version += 1
-    draft.title = title
-    draft.file_name = f"{title}.docx"
-    draft.document_key = f"{draft_id}_{draft.version}"
-    draft.size = len(content)
-    draft.updated_at = now
-    crud_update_draft(db, draft)
-    
-    # Update metadata in GCS
-    if hasattr(storage, "_write_draft_metadata"):
-        from app.schemas.drafts import DraftItem
-        draft_item = DraftItem(
-            employee_id=draft.employee_id,
-            draft_id=draft.draft_id,
-            title=draft.title,
-            file_path=draft.file_path,
-            file_name=draft.file_name,
-            document_key=draft.document_key,
-            version=draft.version,
-            size=draft.size,
-            content_type=draft.content_type,
-            created_at=draft.created_at,
-            updated_at=draft.updated_at
-        )
-        storage._write_draft_metadata(employee_id, draft_item)
-    
-    return {"error": 0}
 
 
 @router.delete("/{employee_id}/{draft_id}")

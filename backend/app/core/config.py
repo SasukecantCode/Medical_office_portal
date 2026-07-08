@@ -30,13 +30,6 @@ class Settings(BaseSettings):
     gcs_bucket_name: str = "medical-office-hr-documents"
     document_max_size_bytes: int = 10 * 1024 * 1024
 
-    # ONLYOFFICE Docs integration
-    onlyoffice_document_server_url: str | None = None
-    onlyoffice_jwt_secret: str | None = None
-    onlyoffice_token_ttl_minutes: int = 60 * 24 * 7
-
-    # Internal URL for ONLYOFFICE callbacks (typically docker host gateway)
-    onlyoffice_callback_url: str | None = None
 
     # Authentication / registration
     registration_access_code: str = "namsai123"

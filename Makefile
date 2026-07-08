@@ -1,7 +1,7 @@
 .PHONY: start backend frontend install seed-master
 
 start:
-	@echo "Starting development environment (Backend, Frontend, ONLYOFFICE)..."
+	@echo "Starting development environment (Backend, Frontend)..."
 	@bash scripts/start_dev.sh
 
 backend:

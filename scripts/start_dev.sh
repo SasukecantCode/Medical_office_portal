@@ -9,49 +9,7 @@ ONLYOFFICE_CONTAINER="onlyoffice"
 echo "Starting development environment..."
 echo "===================================="
 
-# 1. Start ONLYOFFICE container (if needed)
-echo "Checking ONLYOFFICE container status..."
 
-if docker ps -a --format '{{.Names}}' | grep -Eq "^${ONLYOFFICE_CONTAINER}\$"; then
-    # Check if it has the correct JWT_SECRET
-    if ! docker inspect --format '{{.Config.Env}}' ${ONLYOFFICE_CONTAINER} | grep -q "JWT_SECRET=S6hGqch18ieb3n5yunIIfC9EuaGMwWM7"; then
-        echo "⏳ ONLYOFFICE container exists but has incorrect JWT_SECRET. Recreating..."
-        docker rm -f ${ONLYOFFICE_CONTAINER} >/dev/null
-    else
-        # Container exists and has correct secret, check if it's running
-        if [ "$(docker inspect -f '{{.State.Running}}' ${ONLYOFFICE_CONTAINER})" = "true" ]; then
-            echo "✅ ONLYOFFICE container is already running."
-        else
-            echo "⏳ ONLYOFFICE container exists but is stopped. Starting it..."
-            docker start ${ONLYOFFICE_CONTAINER} >/dev/null
-            if [ $? -eq 0 ]; then
-                echo "✅ ONLYOFFICE container started successfully."
-            else
-                echo "❌ Failed to start ONLYOFFICE container."
-                exit 1
-            fi
-        fi
-    fi
-fi
-
-if ! docker ps -a --format '{{.Names}}' | grep -Eq "^${ONLYOFFICE_CONTAINER}\$"; then
-    echo "⏳ ONLYOFFICE container '${ONLYOFFICE_CONTAINER}' does not exist."
-    echo "Creating and starting ONLYOFFICE container..."
-    # The JWT_SECRET must match the one in backend/.env
-    docker run -i -t -d -p 8080:80 \
-        --name ${ONLYOFFICE_CONTAINER} \
-        --add-host=host.docker.internal:host-gateway \
-        -e JWT_SECRET=S6hGqch18ieb3n5yunIIfC9EuaGMwWM7 \
-        -e JWT_ENABLED=true \
-        onlyoffice/documentserver >/dev/null
-    
-    if [ $? -eq 0 ]; then
-        echo "✅ ONLYOFFICE container created and started successfully."
-    else
-        echo "❌ Failed to create ONLYOFFICE container."
-        exit 1
-    fi
-fi
 
 echo "===================================="
 
@@ -93,8 +51,7 @@ cleanup() {
     fuser -k 3000/tcp 2>/dev/null || true
     fuser -k 8000/tcp 2>/dev/null || true
     
-    echo "Stopping ONLYOFFICE container..."
-    docker stop ${ONLYOFFICE_CONTAINER} >/dev/null 2>&1
+
     
     echo "✅ Development environment stopped cleanly."
     echo "===================================="

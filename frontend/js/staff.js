@@ -4,7 +4,7 @@
 
 import { api, clearStaffPhotoCache, getStaffPhotoObjectUrl } from './api.js';
 import { showToast } from './animations.js';
-import { renderVault, openOnlyOfficeEditor } from './vault.js';
+import { renderVault } from './vault.js';
 
 // ── State ──
 let currentFilters = { q: '', designation: '' };
@@ -404,9 +404,10 @@ async function handleRowAction(e) {
         const title = docTitle;
         const draft = await api.createDraft(empId, title);
         draftId = draft.draft_id;
-        showToast('New document created!', 'success');
+        showToast('New document created! Open in Desktop App to edit.', 'success');
+      } else {
+        showToast('Document ready! Open in Desktop App to edit.', 'success');
       }
-      openOnlyOfficeEditor(empId, draftId);
     } catch (err) {
       showToast(`Failed to open document: ${err.message}`, 'error');
     }

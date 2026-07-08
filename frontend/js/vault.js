@@ -622,9 +622,6 @@ async function loadDrafts(empId) {
           </div>
         </div>
         <div class="draft-item-actions">
-          <button class="draft-action-btn draft-action-edit" data-action="open-editor" title="Open in Editor">
-            ${ICON_SVG.edit}
-          </button>
           <button class="draft-action-btn draft-action-rename" data-action="rename-draft" title="Rename Draft">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
           </button>
@@ -649,15 +646,6 @@ async function loadDrafts(empId) {
 }
 
 function wireDraftActions(listEl, empId) {
-  listEl.querySelectorAll('[data-action="open-editor"]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const item = btn.closest('.draft-item');
-      const draftId = item.dataset.draftId;
-      const empIdVal = item.dataset.empId;
-      openOnlyOfficeEditor(empIdVal, draftId);
-    });
-  });
-
   listEl.querySelectorAll('[data-action="rename-draft"]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const item = btn.closest('.draft-item');
@@ -683,18 +671,10 @@ function wireDraftActions(listEl, empId) {
       const item = btn.closest('.draft-item');
       const draftId = item.dataset.draftId;
       const empIdVal = item.dataset.empId;
+      const title = item.querySelector('.draft-item-title')?.textContent || draftId;
       try {
-        const config = await api.getDraftConfig(empIdVal, draftId);
-        // Instead of using editorConfig.document.url which may be an internal Docker URL,
-        // construct the download URL using the same endpoint
-        const tokenMatch = config.editor_config?.document?.url?.match(/token=([^&]+)/);
-        const tokenStr = tokenMatch ? `?token=${tokenMatch[1]}` : '';
-        const a = document.createElement('a');
-        a.href = `/api/documents/drafts/${empIdVal}/${draftId}/source${tokenStr}`;
-        a.download = config.draft?.file_name || `${draftId}.docx`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
+        const apiUrl = `/api/documents/drafts/${empIdVal}/${draftId}/source`;
+        downloadWithAuth(apiUrl, `${title}.docx`);
       } catch (err) {
         showToast(`Download failed: ${err.message}`, 'error');
       }
@@ -718,114 +698,4 @@ function wireDraftActions(listEl, empId) {
       }
     });
   });
-}
-
-export async function openOnlyOfficeEditor(empId, draftId) {
-  try {
-    showToast('Loading editor configuration…', 'info', 2000);
-    const data = await api.getDraftConfig(empId, draftId);
-    const editorConfig = data.editor_config;
-    const draft = data.draft;
-
-    // Build a full-screen ONLYOFFICE editor overlay
-    const overlay = document.createElement('div');
-    overlay.className = 'onlyoffice-overlay';
-    overlay.innerHTML = `
-      <div class="onlyoffice-container">
-        <div class="onlyoffice-header">
-          <div class="onlyoffice-header-left">
-            <div class="onlyoffice-header-icon">📝</div>
-            <div>
-              <div class="onlyoffice-doc-title">${esc(draft.title)}</div>
-              <div class="onlyoffice-doc-meta">Draft v${draft.version} • ${fmtDate(draft.updated_at)}</div>
-            </div>
-          </div>
-          <div class="onlyoffice-header-actions">
-            <button class="btn btn-ghost btn-sm onlyoffice-close-btn" id="oo-close">✕ Close</button>
-          </div>
-        </div>
-        <div class="onlyoffice-body">
-          <div class="onlyoffice-placeholder">
-            <div class="onlyoffice-placeholder-icon">${ICON_SVG.draft}</div>
-            <h3>ONLYOFFICE Editor</h3>
-            <p>The editor requires a running ONLYOFFICE Document Server.<br/>
-               Connect your server URL in backend settings to enable live editing.</p>
-            <div class="onlyoffice-config-preview">
-              <div class="onlyoffice-config-label">Editor Configuration</div>
-              <pre class="onlyoffice-config-json">${esc(JSON.stringify(editorConfig, null, 2))}</pre>
-            </div>
-            <div class="onlyoffice-placeholder-actions">
-              <button class="btn btn-primary btn-sm" id="oo-download-btn">Download DOCX</button>
-              <button class="btn btn-ghost btn-sm" id="oo-copy-json">Copy Config JSON</button>
-            </div>
-          </div>
-          <div id="onlyoffice-editor-frame" class="onlyoffice-frame"></div>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(overlay);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => overlay.classList.add('visible'));
-    });
-
-    const closeEditor = () => {
-      overlay.classList.remove('visible');
-      setTimeout(() => {
-        overlay.remove();
-        loadDrafts(empId);
-      }, 300);
-    };
-
-    overlay.querySelector('#oo-close').addEventListener('click', closeEditor);
-    overlay.addEventListener('click', e => { if (e.target === overlay) closeEditor(); });
-    document.addEventListener('keydown', function escKey(e) {
-      if (e.key === 'Escape') { closeEditor(); document.removeEventListener('keydown', escKey); }
-    });
-
-    overlay.querySelector('#oo-download-btn')?.addEventListener('click', () => {
-      const tokenMatch = editorConfig?.document?.url?.match(/token=([^&]+)/);
-      const tokenStr = tokenMatch ? `?token=${tokenMatch[1]}` : '';
-      const a = document.createElement('a');
-      a.href = `/api/documents/drafts/${empId}/${draftId}/source${tokenStr}`;
-      a.download = draft.file_name || `${draftId}.docx`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    });
-
-    const copyConfig = () => {
-      navigator.clipboard.writeText(JSON.stringify(editorConfig, null, 2))
-        .then(() => showToast('Config copied to clipboard', 'success'))
-        .catch(() => showToast('Copy failed', 'error'));
-    };
-    overlay.querySelector('#oo-copy-json')?.addEventListener('click', copyConfig);
-
-    // If ONLYOFFICE Document Server is configured, dynamically load its API script
-    const documentServerUrl = data.document_server_url;
-    if (documentServerUrl && editorConfig) {
-      if (!window.DocsAPI) {
-        showToast('Initializing Document Server connection…', 'info', 2000);
-        await new Promise((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = `${documentServerUrl}/web-apps/apps/api/documents/api.js`;
-          script.onload = resolve;
-          script.onerror = () => reject(new Error('Failed to load Document Server API from ' + documentServerUrl));
-          document.head.appendChild(script);
-        });
-      }
-
-      if (window.DocsAPI) {
-        const frameEl = overlay.querySelector('#onlyoffice-editor-frame');
-        const placeholder = overlay.querySelector('.onlyoffice-placeholder');
-        if (placeholder) placeholder.style.display = 'none';
-        if (frameEl) frameEl.style.display = 'block';
-
-        console.log('[ONLYOFFICE] Initializing editor with config:', JSON.stringify(editorConfig, null, 2));
-        new window.DocsAPI.DocEditor('onlyoffice-editor-frame', editorConfig);
-      }
-    }
-  } catch (err) {
-    showToast(`Editor error: ${err.message}`, 'error');
-  }
 }

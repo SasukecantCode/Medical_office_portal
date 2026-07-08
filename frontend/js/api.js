@@ -419,8 +419,6 @@ export const api = {
   getDraft: (employeeId, draftId) =>
     request(`/documents/drafts/${encodeURIComponent(employeeId)}/${encodeURIComponent(draftId)}`),
 
-  getDraftConfig: (employeeId, draftId) =>
-    request(`/documents/drafts/${encodeURIComponent(employeeId)}/${encodeURIComponent(draftId)}/onlyoffice-config`),
 
   deleteDraft: (employeeId, draftId) =>
     request(`/documents/drafts/${encodeURIComponent(employeeId)}/${encodeURIComponent(draftId)}`, {
