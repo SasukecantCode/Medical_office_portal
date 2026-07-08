@@ -1,52 +1,53 @@
-# DMO Namsai Portal (Thin-Client Pivot)
+# DMO Namsai Portal
 
-Welcome to the newly structured DMO Namsai Portal monorepo. This system has transitioned from a server-heavy ONLYOFFICE deployment to a lightweight Windows thin-client architecture backed by a stateless cloud API and managed database.
+Welcome to the DMO Namsai Portal monorepo. This system is a secure, local-first medical office document management system and HR portal. It is designed around a lightweight Windows desktop client backed by a stateless cloud API and managed database.
 
 ## Architecture Overview
 
-*   **`desktop-app/`**: The Windows thin client built using Tauri (Rust + React/TypeScript). It delegates document editing to native Microsoft Word.
-*   **`backend-api/`**: A stateless Node.js (Fastify) API deployed on Google Cloud Run, mediating all access to storage and database.
-*   **`infra/`**: Infrastructure as Code (IaC) and configuration files for setting up GCP (Cloud Run, GCS) and Supabase.
-*   **`docs/`**: Architecture diagrams, workflow documentation, and operational runbooks.
+*   **`desktop-app/`**: The Windows desktop client built using Tauri (Rust + Vanilla JS/HTML). It provides the secure vault interface and delegates document editing directly to native Microsoft Word.
+*   **`backend/`**: A stateless Python FastAPI backend API. It mediates all access to the Postgres database and Google Cloud Storage (GCS), enforcing role-based access control and handling field-level encryption.
+*   **`frontend/`**: The web-based HR portal built with Vanilla JS/Vite.
+
+## How Authentication Works
+
+Authentication in the desktop application bridges standard web JWT flows with native OS integrations seamlessly:
+
+1. **Login Flow:** Users authenticate against the FastAPI backend (`POST /api/auth/login`), which verifies credentials and issues a JSON Web Token (JWT).
+2. **Session Storage:** The desktop client currently stores this token in standard local storage to maintain session state across reloads.
+3. **Native Backend Hooking:** When a user opens a document to edit in Word, the frontend securely passes the active JWT down to the Tauri Rust core (`edit_document` command) via Inter-Process Communication (IPC).
+4. **Authenticated Rust Daemon:** The Rust background thread operates as an authenticated proxy. It attaches the JWT to the `Authorization: Bearer <token>` header to securely download the target document. When the local file watcher detects a save event (e.g., you press `Ctrl+S` in Word), the Rust daemon uses the same JWT to authorize the upload (`PUT`) directly back to the FastAPI cloud backend. 
 
 ## Local Development Setup
 
 ### Prerequisites
 
-1.  **Node.js**: v20 or higher.
-2.  **Rust**: Latest stable (for Tauri desktop app development).
-3.  **Supabase CLI**: For local database development (optional but recommended).
-4.  **Google Cloud CLI (`gcloud`)**: For storage interaction and Cloud Run deployment.
+1.  **Node.js**: v18 or higher (for building the desktop/web frontends).
+2.  **Rust**: Latest stable `rustup`, `rustc`, `cargo` (for Tauri desktop app development).
+3.  **Python 3.11+**: For the FastAPI backend.
+4.  **PostgreSQL**: v14+ running locally (or via Docker).
+5.  **Visual Studio 2022 Build Tools** *(Windows Only)*: Requires the "Desktop development with C++" workload (MSVC and Windows SDK) to compile Tauri on Windows.
 
-### Required Environment Variables (Secrets)
+### Required Environment Variables
 
-**DO NOT hardcode these in any file.** You must provide them via `.env` files in their respective directories (`backend-api/.env` and `desktop-app/.env`).
-
-**`backend-api/.env`:**
+**`backend/.env`:**
 ```env
-PORT=8080
-NODE_ENV=development
-SUPABASE_URL=https://<YOUR_PROJECT_ID>.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=<YOUR_SERVICE_ROLE_KEY> # Keep secret!
-JWT_SECRET=<YOUR_LONG_RANDOM_SECRET>
-GCP_PROJECT_ID=<YOUR_GCP_PROJECT_ID>
-GCS_BUCKET_NAME=<YOUR_GCS_BUCKET_NAME>
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+# Example backend configuration
+GEMINI_API_KEY=<your_api_key>
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/gcs-key.json
 ```
-
-**`desktop-app/.env`:**
-```env
-VITE_API_BASE_URL=http://localhost:8080 # Or the Cloud Run URL in production
-```
+*(Review `backend/app/core/config.py` for other DB strings and secret parameters needed)*
 
 ### Running Locally
 
 1.  **Backend API:**
     ```bash
-    cd backend-api
-    npm install
-    npm run dev
+    cd backend
+    python -m venv .venv
+    source .venv/bin/activate
+    pip install -r requirements.txt
+    make start
     ```
+    
 2.  **Desktop App:**
     ```bash
     cd desktop-app
@@ -56,7 +57,7 @@ VITE_API_BASE_URL=http://localhost:8080 # Or the Cloud Run URL in production
 
 ## Deployment Steps
 
-1.  **Database:** Apply migrations to your Supabase project (see `infra/supabase`).
-2.  **Storage:** Provision the GCS bucket with lifecycle rules for temp files. Ensure the backend API Service Account has `Storage Object Admin` rights.
-3.  **Backend:** Deploy the API to Google Cloud Run using `gcloud run deploy`. Inject the required environment variables during deployment.
-4.  **Desktop:** Build the Windows installer using `npm run tauri build`. Distribute the resulting `.msi` or `.exe`.
+1.  **Database:** Apply Alembic migrations to your managed Postgres database (`cd backend && alembic upgrade head`).
+2.  **Storage:** Provision the GCS bucket. Ensure the backend API Service Account has `Storage Object Admin` rights.
+3.  **Backend:** Deploy the FastAPI backend using Docker / Cloud Run.
+4.  **Desktop:** Build the Windows installer locally by running `npm run tauri build` on a Windows machine. Distribute the resulting `.msi` or `.exe` installers.
