@@ -35,6 +35,9 @@ jobs:
       - name: Build Python Backend Sidecar
         working-directory: ./backend
         run: |
+          echo "${{ secrets.ENV_FILE }}" > .env
+          mkdir -p ../credentials
+          echo "${{ secrets.GCS_KEY_JSON }}" > ../credentials/gcs-key.json
           pip install -r requirements.txt
           pip install pyinstaller
           pyinstaller --name medical-backend --onefile run_server.py --add-data ".env;." --add-data "..\credentials\gcs-key.json;." --add-data "alembic.ini;." --add-data "alembic;alembic"
