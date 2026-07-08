@@ -232,7 +232,55 @@ def draft_source(
     return StreamingResponse(iter([content]), media_type=DOCX_MIME_TYPE, headers=headers)
 
 
+@router.put("/{employee_id}/{draft_id}/content")
+async def update_draft_content(
+    employee_id: str,
+    draft_id: str,
+    request: Request,
+    current_user=Depends(require_roles("hr", "master")),
+    storage=Depends(get_document_storage_service),
+    db: Session = Depends(get_db),
+):
+    employee_id = validate_employee_id(employee_id)
+    draft = crud_get_draft(db, draft_id)
+    if not draft or draft.employee_id != employee_id:
+        raise HTTPException(status_code=404, detail="Draft not found")
 
+    content = await request.body()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty body")
+    
+    # Store content in GCS/Local
+    if hasattr(storage, "_write_draft_content"):
+        storage._write_draft_content(employee_id, draft_id, content)
+
+    # Store metadata in DB
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    draft.version += 1
+    draft.document_key = f"{draft_id}_{draft.version}"
+    draft.size = len(content)
+    draft.updated_at = now
+    crud_update_draft(db, draft)
+    
+    # Update metadata in GCS
+    if hasattr(storage, "_write_draft_metadata"):
+        from app.schemas.drafts import DraftItem
+        draft_item = DraftItem(
+            employee_id=draft.employee_id,
+            draft_id=draft.draft_id,
+            title=draft.title,
+            file_path=draft.file_path,
+            file_name=draft.file_name,
+            document_key=draft.document_key,
+            version=draft.version,
+            size=draft.size,
+            content_type=draft.content_type,
+            created_at=draft.created_at,
+            updated_at=draft.updated_at
+        )
+        storage._write_draft_metadata(employee_id, draft_item)
+    
+    return {"status": "success", "version": draft.version}
 
 
 @router.delete("/{employee_id}/{draft_id}")
