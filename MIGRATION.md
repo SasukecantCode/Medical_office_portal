@@ -10,6 +10,7 @@ We use Alembic to manage the database schema. Before transferring data, you must
    ```bash
    export DATABASE_URL="postgresql://<user>:<password>@<host>:5432/<db_name>"
    ```
+   *Note: Ensure you have installed the necessary dependencies, including the Postgres driver: `pip install -r requirements.txt`*
 2. Apply the Alembic migrations from the `backend/` directory:
    ```bash
    cd backend

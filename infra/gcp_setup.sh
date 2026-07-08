@@ -56,8 +56,14 @@ gsutil iam ch serviceAccount:$SERVICE_ACCOUNT_NAME@$PROJECT_ID.iam.gserviceaccou
 echo "6. Generating Service Account Key (for local dev / Cloud Run inject)..."
 # In production on Cloud Run, you don't need a key file (it uses the attached service account automatically).
 # This key is mainly for local development.
-gcloud iam service-accounts keys create credentials.json \
-    --iam-account=$SERVICE_ACCOUNT_NAME@$PROJECT_ID.iam.gserviceaccount.com
+EXISTING_KEYS=$(gcloud iam service-accounts keys list --iam-account=$SERVICE_ACCOUNT_NAME@$PROJECT_ID.iam.gserviceaccount.com --managed-by=user --format="value(name)" 2>/dev/null || true)
+if [ -z "$EXISTING_KEYS" ]; then
+    gcloud iam service-accounts keys create credentials.json \
+        --iam-account=$SERVICE_ACCOUNT_NAME@$PROJECT_ID.iam.gserviceaccount.com
+else
+    echo "A user-managed key already exists for this service account. Skipping key creation to prevent sprawl."
+    echo "If you need a new key, delete the old one first via gcloud or the Cloud Console."
+fi
 
 echo ""
 echo "Setup Complete!"

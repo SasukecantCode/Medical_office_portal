@@ -15,4 +15,10 @@ def wipe_all():
         db.close()
 
 if __name__ == "__main__":
+    if os.environ.get("ENVIRONMENT") != "dev":
+        print("Error: Refusing to run outside of dev environment. Set ENVIRONMENT=dev.")
+        sys.exit(1)
+    if "--i-am-sure" not in sys.argv:
+        print("Error: You must provide the --i-am-sure flag to run this script.")
+        sys.exit(1)
     wipe_all()

@@ -12,3 +12,4 @@ alembic==1.11.1
 google-cloud-storage==2.18.0
 python-jose[cryptography]==3.3.0
 bcrypt==4.2.1
+psycopg2-binary==2.9.9
