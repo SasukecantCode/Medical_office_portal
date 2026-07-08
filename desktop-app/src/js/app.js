@@ -356,16 +356,24 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   async function waitForBackend() {
-    await new Promise((r) => setTimeout(r, 1000));
-    for (let attempt = 0; attempt < 6; attempt++) {
+    // Give the sidecar a moment to initialize
+    await new Promise((r) => setTimeout(r, 2000));
+    for (let attempt = 0; attempt < 15; attempt++) {
       try {
         await api.health();
+        console.log('Backend is ready!');
         return;
       } catch {
-        await new Promise((r) => setTimeout(r, 500));
+        console.log(`Backend not ready yet, attempt ${attempt + 1}/15...`);
+        await new Promise((r) => setTimeout(r, 1000));
       }
     }
-    showToast('Backend not reachable. Ensure it\'s running on port 8000.', 'error', 8000);
+    showToast('Backend sidecar did not start. Try restarting the app.', 'error', 15000);
+    const authMsg = document.getElementById('auth-message');
+    if (authMsg) {
+      authMsg.textContent = 'Backend service failed to start. Please restart the application.';
+      authMsg.style.color = '#ef4444';
+    }
   }
 
   waitForBackend();

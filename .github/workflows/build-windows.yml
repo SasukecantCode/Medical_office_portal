@@ -57,9 +57,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: ./desktop-app
-          tagName: v-2
-          releaseName: "Medical Office Portal v-2 (Standalone Thin Client)"
-          releaseBody: "Includes fully bundled Python backend pointing to Supabase Cloud DB."
+          tagName: v-3
+          releaseName: "DMO Namsai Portal v-3 (Full UI + Sidecar Fix)"
+          releaseBody: "v3: Full dashboard UI, fixed sidecar shell permissions, fixed asset paths and IPv6 issue."
           releaseDraft: false
           prerelease: false
 

@@ -10,9 +10,9 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "desktop-app",
-        "width": 800,
-        "height": 600
+        "title": "DMO Namsai — Data Portal",
+        "width": 1280,
+        "height": 800
       }
     ],
     "security": {
