@@ -27,18 +27,13 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
         
-      - name: Install npm dependencies
+      - name: Install dependencies
         working-directory: ./desktop-app
         run: npm install
-        
-      - name: Build Tauri Application
-        working-directory: ./desktop-app
-        run: npm run tauri build
-        
-      - name: Upload Windows Installer Artifacts
-        uses: actions/upload-artifact@v4
+
+      - name: Build and Upload Tauri App
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: Namsai-Portal-Windows-Installers
-          path: |
-            desktop-app/src-tauri/target/release/bundle/msi/*.msi
-            desktop-app/src-tauri/target/release/bundle/nsis/*.exe
+          projectPath: ./desktop-app
