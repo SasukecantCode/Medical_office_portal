@@ -57,9 +57,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: ./desktop-app
-          tagName: v-3
-          releaseName: "DMO Namsai Portal v-3 (Full UI + Sidecar Fix)"
-          releaseBody: "v3: Full dashboard UI, fixed sidecar shell permissions, fixed asset paths and IPv6 issue."
+          tagName: v-4
+          releaseName: "DMO Namsai Portal v-4 (Stable Desktop Client)"
+          releaseBody: "v4: Stable release with fixed DB IPv6 pooler connection and sidecar shell permissions."
           releaseDraft: false
           prerelease: false
 
