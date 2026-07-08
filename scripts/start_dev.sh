@@ -4,7 +4,7 @@
 set -m
 
 # Configuration
-ONLYOFFICE_CONTAINER="onlyoffice"
+
 
 echo "Starting development environment..."
 echo "===================================="

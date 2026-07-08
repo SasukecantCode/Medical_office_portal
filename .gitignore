@@ -1,0 +1,204 @@
+# ═══════════════════════════════════════════════════════
+# Secrets & credentials (never commit)
+# ═══════════════════════════════════════════════════════
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+
+credentials/
+**/credentials/
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+
+# Cloud / API key files
+**/gcs-key.json
+**/*service-account*.json
+**/*service_account*.json
+**/secrets.json
+**/secrets/
+.secrets/
+
+# Local API key dumps & provider tokens (do not commit)
+gemini-api-new-working.txt
+open-router-api.txt
+*api*key*.txt
+*api-key*.txt
+*api*working*.txt
+*.token
+
+
+
+
+
+
+
+
+
+
+
+
+*.tokens
+
+# Auth / session material
+*.session
+*.sessions
+.auth/
+
+# ═══════════════════════════════════════════════════════
+# Databases & uploaded / generated data (PII)
+# ═══════════════════════════════════════════════════════
+*.db
+*.sqlite
+*.sqlite3
+portal.db
+backend/*.db
+backend/*.sqlite3
+
+uploads/
+backend/uploads/
+**/uploads/*
+!**/uploads/.gitkeep
+
+# Staff exports & imports (sensitive)
+hr_staff.csv
+hr_staff.xls
+hr_staff.xlsx
+Details of staff list*
+*staff list*
+sample_scan*.txt
+ui_upload_test.txt
+
+# ═══════════════════════════════════════════════════════
+# Python
+# ═══════════════════════════════════════════════════════
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+*.so
+.Python
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+pip-wheel-metadata/
+*.manifest
+*.spec
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.dmypy.json
+dmypy.json
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# ═══════════════════════════════════════════════════════
+# Backend scratch / one-off tests (not part of the app)
+# ═══════════════════════════════════════════════════════
+backend/payload.json
+token.txt
+
+# ═══════════════════════════════════════════════════════
+# Node / frontend build
+# ═══════════════════════════════════════════════════════
+frontend/node_modules/
+node_modules/
+frontend/dist/
+dist/
+frontend/.vite/
+.vite/
+*.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.npm
+.yarn/
+.pnp.*
+.eslintcache
+.stylelintcache
+.stylelintrc.json
+*.tsbuildinfo
+
+# ═══════════════════════════════════════════════════════
+# IDE & editor
+# ═══════════════════════════════════════════════════════
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.iml
+.cursor/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# Local tooling config (machine-specific)
+pyrightconfig.json
+
+# ═══════════════════════════════════════════════════════
+# OS & misc
+# ═══════════════════════════════════════════════════════
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Logs & temp
+*.log
+logs/
+tmp/
+temp/
+.tmp/
+*.tmp
+*.bak
+*.backup
+*.old
+
+# Reference / scratch assets (not production sources)
+referencee scroll/
+referncee scroll/
+logo.png
+Namsai_coverpage.png
+
+# Archives (often contain exports or dumps)
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.rar

@@ -139,7 +139,7 @@ export async function renderVault(container, staffId, staffName, staffData) {
           <div class="drafts-card-icon">${ICON_SVG.draft}</div>
           <div>
             <h4 class="drafts-card-title">Document Drafts</h4>
-            <p class="drafts-card-subtitle">Create and edit Word documents with ONLYOFFICE</p>
+            <p class="drafts-card-subtitle">Create native Word document drafts</p>
           </div>
         </div>
         <button class="btn-create-draft" id="vault-create-draft-btn" title="New Draft">

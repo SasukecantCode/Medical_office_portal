@@ -406,7 +406,7 @@ export const api = {
       body: JSON.stringify({ employee_id: employeeId }),
     }),
 
-  // ── Document Drafts (ONLYOFFICE) ──
+  // ── Document Drafts ──
   createDraft: (employeeId, title) =>
     request('/documents/drafts/create', {
       method: 'POST',
