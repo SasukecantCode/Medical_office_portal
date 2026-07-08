@@ -1,21 +1,21 @@
 # DMO Namsai Portal
 
-Welcome to the DMO Namsai Portal monorepo. This system is a secure, local-first medical office document management system and HR portal. It is designed around a lightweight Windows desktop client backed by a stateless cloud API and managed database.
+Welcome to the DMO Namsai Portal monorepo. This system is a secure, local-first medical office document management system and HR portal tailored for government operations in Namsai. It is designed around a lightweight Windows desktop client backed by a stateless cloud API and managed database.
+
+## Why a Desktop App for Government HR?
+
+Transitioning to a native desktop application provides several key benefits for government HR workflows:
+
+*   **Familiar Workflow:** Government staff are deeply accustomed to using native Microsoft Word for drafting official letters, memos, and notifications. Instead of forcing them to learn a clunky web-based editor, this app hooks directly into the Word interface they already know.
+*   **Data Sovereignty & Security:** Documents never linger on third-party web servers (like ONLYOFFICE). Drafts are pulled directly to the local machine, edited natively, and pushed securely to the managed cloud database.
+*   **Offline Tolerance:** The native file-watcher can gracefully queue uploads or handle transient network drops much better than a browser tab, which is crucial for areas with intermittent connectivity.
+*   **Robust Auditing:** By bridging native OS interactions with our cloud API, every single document view, edit, and save is securely tied to the staff member's authenticated identity, ensuring strict compliance with government data accountability standards.
 
 ## Architecture Overview
 
 *   **`desktop-app/`**: The Windows desktop client built using Tauri (Rust + Vanilla JS/HTML). It provides the secure vault interface and delegates document editing directly to native Microsoft Word.
 *   **`backend/`**: A stateless Python FastAPI backend API. It mediates all access to the Postgres database and Google Cloud Storage (GCS), enforcing role-based access control and handling field-level encryption.
-*   **`frontend/`**: The web-based HR portal built with Vanilla JS/Vite.
-
-## How Authentication Works
-
-Authentication in the desktop application bridges standard web JWT flows with native OS integrations seamlessly:
-
-1. **Login Flow:** Users authenticate against the FastAPI backend (`POST /api/auth/login`), which verifies credentials and issues a JSON Web Token (JWT).
-2. **Session Storage:** The desktop client currently stores this token in standard local storage to maintain session state across reloads.
-3. **Native Backend Hooking:** When a user opens a document to edit in Word, the frontend securely passes the active JWT down to the Tauri Rust core (`edit_document` command) via Inter-Process Communication (IPC).
-4. **Authenticated Rust Daemon:** The Rust background thread operates as an authenticated proxy. It attaches the JWT to the `Authorization: Bearer <token>` header to securely download the target document. When the local file watcher detects a save event (e.g., you press `Ctrl+S` in Word), the Rust daemon uses the same JWT to authorize the upload (`PUT`) directly back to the FastAPI cloud backend. 
+*   **`frontend/`**: The legacy web-based HR portal built with Vanilla JS/Vite, primarily used for dashboard reporting and basic tasks.
 
 ## Local Development Setup
 
