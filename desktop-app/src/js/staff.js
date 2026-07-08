@@ -404,7 +404,20 @@ async function handleRowAction(e) {
         const title = docTitle;
         const draft = await api.createDraft(empId, title);
         draftId = draft.draft_id;
-        showToast('New document created! Open in Desktop App to edit.', 'success');
+      }
+      
+      if (window.__TAURI__) {
+        const { invoke } = window.__TAURI__.core || window.__TAURI__.tauri || window.__TAURI__;
+        const downloadUrl = `http://127.0.0.1:8000/api/documents/drafts/${encodeURIComponent(empId)}/${encodeURIComponent(draftId)}/source`;
+        const uploadUrl = `http://127.0.0.1:8000/api/documents/drafts/${encodeURIComponent(empId)}/${encodeURIComponent(draftId)}/content`;
+        
+        await invoke('edit_document', {
+          employeeId: empId,
+          draftId: draftId,
+          filename: `${docTitle.replace(/\s+/g, '_')}.docx`,
+          downloadUrl,
+          uploadUrl
+        });
       } else {
         showToast('Document ready! Open in Desktop App to edit.', 'success');
       }
