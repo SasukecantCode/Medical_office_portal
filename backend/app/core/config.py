@@ -62,5 +62,8 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = None
     gemini_model: str | None = "models/gemini-2.5-flash"
 
+    # Field-Level Encryption Key (Base64 URL-safe 32-byte key)
+    field_encryption_key: str | None = None
+
 
 settings = Settings()

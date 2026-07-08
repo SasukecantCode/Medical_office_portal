@@ -4,6 +4,7 @@ from sqlalchemy import JSON, Date, DateTime, Integer, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.db.types import EncryptedString
 
 
 class HRStaff(Base):
@@ -42,8 +43,8 @@ class HRStaff(Base):
     email: Mapped[str] = mapped_column(String(255), nullable=True, index=True)
 
     # ── Identity Documents ──
-    aadhaar_number: Mapped[str] = mapped_column(String(20), nullable=True)
-    pan_number: Mapped[str] = mapped_column(String(20), nullable=True)
+    aadhaar_number: Mapped[str] = mapped_column(EncryptedString(20), nullable=True)
+    pan_number: Mapped[str] = mapped_column(EncryptedString(20), nullable=True)
 
     remarks: Mapped[str] = mapped_column(String(2000), nullable=True)
 
