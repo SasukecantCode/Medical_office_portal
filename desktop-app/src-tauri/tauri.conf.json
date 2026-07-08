@@ -5,8 +5,8 @@
   "identifier": "com.dmo.namsai-portal",
   "build": {
     "frontendDist": "../src/dist",
-    "beforeDevCommand": "cd ../src && npm run dev",
-    "beforeBuildCommand": "cd ../src && npm install && npm run build"
+    "beforeDevCommand": "npm --prefix src run dev",
+    "beforeBuildCommand": "npm --prefix src install && npm --prefix src run build"
   },
   "app": {
     "withGlobalTauri": true,

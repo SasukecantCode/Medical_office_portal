@@ -57,9 +57,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: ./desktop-app
-          tagName: v-5
-          releaseName: "DMO Namsai Portal v-5 (Vite-Bundled Full Features)"
-          releaseBody: "v5: Vite now bundles all JS/CSS/npm packages. Full webapp feature parity including ID card export, document vault, and admin logs."
+          tagName: v-6
+          releaseName: "DMO Namsai Portal v-6 (Vite-Bundled Full Features)"
+          releaseBody: "v6: Fixed Tauri beforeBuildCommand path resolution on Windows runners. Vite now bundles all JS/CSS/npm packages. Full webapp feature parity."
           releaseDraft: false
           prerelease: false
 
