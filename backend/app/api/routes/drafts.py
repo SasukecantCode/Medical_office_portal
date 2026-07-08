@@ -237,6 +237,7 @@ async def update_draft_content(
     employee_id: str,
     draft_id: str,
     request: Request,
+    expected_version: int | None = None,
     current_user=Depends(require_roles("hr", "master")),
     storage=Depends(get_document_storage_service),
     db: Session = Depends(get_db),
@@ -245,6 +246,9 @@ async def update_draft_content(
     draft = crud_get_draft(db, draft_id)
     if not draft or draft.employee_id != employee_id:
         raise HTTPException(status_code=404, detail="Draft not found")
+
+    if expected_version is not None and draft.version != expected_version:
+        raise HTTPException(status_code=409, detail=f"Conflict: Expected version {expected_version}, but current version is {draft.version}")
 
     content = await request.body()
     if not content:
