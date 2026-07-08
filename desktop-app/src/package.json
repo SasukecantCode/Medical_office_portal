@@ -1,0 +1,23 @@
+{
+  "name": "arunachal-hr-portal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "HR Admin Portal - Directorate of Health & Family Welfare, Arunachal Pradesh",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "vite": "^8.0.13"
+  },
+  "dependencies": {
+    "geist": "^1.7.1",
+    "html2canvas": "^1.4.1",
+    "jszip": "^3.10.1"
+  }
+}
