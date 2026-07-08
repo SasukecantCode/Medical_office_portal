@@ -659,8 +659,36 @@ async function printIdCard() {
 
 window.printIdCard = printIdCard;
 
-import html2canvas from 'html2canvas';
-import JSZip from 'jszip';
+// Lazy-load npm packages — bare specifiers crash the ES module graph
+// when Tauri serves raw files without a Vite build step.
+let _html2canvas = null;
+let _JSZip = null;
+
+async function getHtml2Canvas() {
+  if (!_html2canvas) {
+    try {
+      const mod = await import('html2canvas');
+      _html2canvas = mod.default || mod;
+    } catch {
+      console.warn('html2canvas not available — ID card image export disabled');
+      _html2canvas = null;
+    }
+  }
+  return _html2canvas;
+}
+
+async function getJSZip() {
+  if (!_JSZip) {
+    try {
+      const mod = await import('jszip');
+      _JSZip = mod.default || mod;
+    } catch {
+      console.warn('JSZip not available — bulk ID card export disabled');
+      _JSZip = null;
+    }
+  }
+  return _JSZip;
+}
 
 /** Styles for off-screen html2canvas capture (print uses native layout).
  *  html2canvas has known issues with:
@@ -755,6 +783,8 @@ function waitForImages(root, timeoutMs = 8000) {
 async function captureIdCardImage(container, scale = 3) {
   await waitForImages(container);
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const html2canvas = await getHtml2Canvas();
+  if (!html2canvas) throw new Error('html2canvas not loaded');
   return html2canvas(container, {
     scale,
     useCORS: true,
@@ -824,6 +854,8 @@ export async function generateIdCardsZip(staffList, fieldDefs = [], opts = {}) {
     return { blob: null, count: 0, skipped: 0 };
   }
 
+  const JSZip = await getJSZip();
+  if (!JSZip) throw new Error('JSZip not loaded');
   const zip = new JSZip();
   const container = document.createElement('div');
   container.style.position = 'absolute';
