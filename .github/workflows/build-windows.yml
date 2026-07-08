@@ -57,9 +57,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: ./desktop-app
-          tagName: v-4
-          releaseName: "DMO Namsai Portal v-4 (Stable Desktop Client)"
-          releaseBody: "v4: Stable release with fixed DB IPv6 pooler connection and sidecar shell permissions."
+          tagName: v-5
+          releaseName: "DMO Namsai Portal v-5 (Vite-Bundled Full Features)"
+          releaseBody: "v5: Vite now bundles all JS/CSS/npm packages. Full webapp feature parity including ID card export, document vault, and admin logs."
           releaseDraft: false
           prerelease: false
 

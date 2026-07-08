@@ -1,10 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "desktop-app",
-  "version": "0.1.0",
-  "identifier": "com.claude.desktop-app",
+  "productName": "DMO-Namsai-Portal",
+  "version": "0.4.0",
+  "identifier": "com.dmo.namsai-portal",
   "build": {
-    "frontendDist": "../src"
+    "frontendDist": "../src/dist",
+    "beforeDevCommand": "cd ../src && npm run dev",
+    "beforeBuildCommand": "cd ../src && npm install && npm run build"
   },
   "app": {
     "withGlobalTauri": true,
