@@ -22,7 +22,7 @@ def upgrade():
         sa.Column('label', sa.String(length=255), nullable=False),
         sa.Column('data_type', sa.String(length=50), nullable=False, server_default='string'),
         sa.Column('sort_order', sa.SmallInteger(), nullable=False, server_default='0'),
-        sa.Column('required', sa.Boolean(), nullable=False, server_default=sa.text('0')),
+        sa.Column('required', sa.Boolean(), nullable=False, server_default=sa.text('false')),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),

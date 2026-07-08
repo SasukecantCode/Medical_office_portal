@@ -116,7 +116,7 @@ def upgrade():
     op.create_index(op.f('ix_auth_invites_role'), 'auth_invites', ['role'], unique=False)
     op.create_index(op.f('ix_auth_invites_token_hash'), 'auth_invites', ['token_hash'], unique=True)
     op.create_index(op.f('ix_auth_invites_token_preview'), 'auth_invites', ['token_preview'], unique=False)
-    op.add_column('auth_users', sa.Column('is_online', sa.Boolean(), server_default=sa.text('0'), nullable=False))
+    op.add_column('auth_users', sa.Column('is_online', sa.Boolean(), server_default=sa.text('false'), nullable=False))
     op.alter_column('auth_users', 'created_at',
                existing_type=sa.DATETIME(),
                nullable=False,
