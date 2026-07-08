@@ -2,7 +2,7 @@
    API Service Layer
    ═══════════════════════════════════════════════════════ */
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = 'http://127.0.0.1:8000/api';
 const AUTH_TOKEN_KEY = 'desktop_auth_token';
 const AUTH_USER_KEY = 'medical_portal_auth_user';
 

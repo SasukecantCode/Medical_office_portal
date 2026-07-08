@@ -713,8 +713,8 @@ function wireDraftActions(listEl, empId) {
       
       const { invoke } = window.__TAURI__.core;
       const authToken = localStorage.getItem('desktop_auth_token') || sessionStorage.getItem('authToken');
-      const downloadUrl = `http://localhost:8000/api/documents/drafts/${empIdVal}/${draftId}/source`;
-      const uploadUrl = `http://localhost:8000/api/documents/drafts/${empIdVal}/${draftId}/content`;
+      const downloadUrl = `http://127.0.0.1:8000/api/documents/drafts/${empIdVal}/${draftId}/source`;
+      const uploadUrl = `http://127.0.0.1:8000/api/documents/drafts/${empIdVal}/${draftId}/content`;
 
       if (btn.classList.contains('is-editing')) {
         try {
