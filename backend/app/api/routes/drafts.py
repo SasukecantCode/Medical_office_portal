@@ -237,7 +237,7 @@ async def update_draft_content(
     employee_id: str,
     draft_id: str,
     request: Request,
-    expected_version: int | None = None,
+    expected_version: int,
     current_user=Depends(require_roles("hr", "master")),
     storage=Depends(get_document_storage_service),
     db: Session = Depends(get_db),

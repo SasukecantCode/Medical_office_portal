@@ -157,6 +157,8 @@ fn edit_document(
         if let Err(e) = fs::remove_dir_all(&cache_dir) {
             eprintln!("Failed to remove cache dir (may be locked by Word): {}", e);
         }
+        
+        get_sessions().lock().unwrap().remove(&draft_id_clone);
         let _ = app.emit("edit-session-ended", draft_id_clone);
     });
     
