@@ -664,10 +664,10 @@ function wireDraftActions(listEl, empId) {
       const draftId = item.dataset.draftId;
       const empIdVal = item.dataset.empId;
       const currentTitle = item.querySelector('.draft-item-title')?.textContent || 'Untitled Draft';
-      
+
       const newTitle = prompt('Enter new document name:', currentTitle);
       if (!newTitle || newTitle.trim() === '' || newTitle === currentTitle) return;
-      
+
       try {
         await api.renameDraft(empIdVal, draftId, newTitle.trim());
         showToast('Draft renamed successfully', 'success');

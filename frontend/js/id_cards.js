@@ -280,18 +280,26 @@ function renderEditorSections(draft, fieldDefs = []) {
       title: 'Core Identity',
       fields: [
         ['full_name', 'Full Name'],
-        ['fathers_name', "Father's Name"],
         ['designation', 'Designation'],
+        ['cadre', 'Cadre'],
+        ['employment_type', 'Employment Type'],
       ],
     },
     {
-      title: 'Contact & Location',
+      title: 'Work Location',
       fields: [
-        ['present_posting_place', 'Present Posting Place'],
-        ['phone', 'Contact No.'],
-        ['email', 'Email ID'],
-        ['present_address', 'Present Address'],
-        ['permanent_address', 'Permanent Address'],
+        ['facility_name', 'Facility Name'],
+        ['facility_type', 'Facility Type'],
+        ['posting_place', 'Posting Place'],
+        ['block', 'Block'],
+        ['district', 'District'],
+      ],
+    },
+    {
+      title: 'Contact',
+      fields: [
+        ['phone', 'Phone'],
+        ['email', 'Email'],
       ],
     },
     {
@@ -299,6 +307,7 @@ function renderEditorSections(draft, fieldDefs = []) {
       fields: [
         ['gender', 'Gender'],
         ['date_of_birth', 'Date of Birth'],
+        ['date_of_joining', 'Date of Joining'],
       ],
     },
   ];
@@ -382,15 +391,16 @@ function cloneStaff(staff) {
 }
 
 function generateIdCardFront(staff, photoSrc = null) {
-  const staffId = staff?.display_id || (staff?.id ? `NDMO/ESTT/${String(staff.id).padStart(3, '0')}` : '');
+  const staffId = staff?.id ? `#${staff.id}` : '';
   const photo = photoSrc ? `<img src="${escAttr(photoSrc)}" style="width:100%; height:100%; object-fit:cover;" alt="" crossorigin="anonymous" />` : '';
 
   const rows = [
     ['NAME', staff.full_name, true],
-    ["FATHER'S NAME", staff.fathers_name],
     ['GENDER', staff.gender],
     ['DESIGNATION', staff.designation],
-    ['POSTING PLACE', staff.present_posting_place],
+    ['FACILITY NAME', staff.facility_name],
+    ['POSTING PLACE', staff.posting_place || staff.block || ''],
+    ['DISTRICT', staff.district],
   ];
 
   return `
@@ -438,6 +448,7 @@ function generateIdCardFront(staff, photoSrc = null) {
 
 function generateIdCardBack(staff, fieldDefs = []) {
   const dob = formatDateValue(staff.date_of_birth);
+  const dateOfJoining = formatDateValue(staff.date_of_joining);
   const customRows = getCustomFieldRows(staff, fieldDefs);
 
   return `
@@ -447,20 +458,31 @@ function generateIdCardBack(staff, fieldDefs = []) {
           <span>The Holder of this Card is an Employee under the Govt. of Arunachal Pradesh.</span>
         </div>
         <div class="idc-back-content">
-          <div class="idc-row" style="flex-direction: column;">
-            <div class="idc-field"><span class="idc-f-lbl">Staff ID:</span> <span class="idc-line">${escHtml(staff.display_id || (staff.id ? `NDMO/ESTT/${String(staff.id).padStart(3, '0')}` : ''))}</span></div>
-            <div class="idc-field"><span class="idc-f-lbl">DOB:</span> <span class="idc-line">${escHtml(dob)}</span></div>
-            <div class="idc-field"><span class="idc-f-lbl">Contact No.:</span> <span class="idc-line">${escHtml(staff.phone || '')}</span></div>
-            <div class="idc-field"><span class="idc-f-lbl">Email ID:</span> <span class="idc-line">${escHtml(staff.email || '')}</span></div>
-            
-            <div class="idc-section-title" style="margin-top: 6px;">ADDRESS</div>
-            <div class="idc-field" style="align-items: flex-start;">
-              <span class="idc-f-lbl" style="width: 80px;">Present:</span> 
-              <span class="idc-line" style="flex:1; white-space: normal; line-height: 1.2;">${escHtml(staff.present_address || '')}</span>
+          <!-- Top & Mid Combined Row -->
+          <div class="idc-row">
+            <!-- Left Column -->
+            <div class="idc-col">
+              <div class="idc-field"><span class="idc-f-lbl">Cadre:</span> <span class="idc-line">${escHtml(staff.cadre || '')}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">Employment Type:</span> <span class="idc-line">${escHtml(staff.employment_type || '')}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">Facility Type:</span> <span class="idc-line">${escHtml(staff.facility_type || '')}</span></div>
+              
+              <div class="idc-section-title" style="margin-top: 6px;">SERVICE DETAILS</div>
+              <div class="idc-field"><span class="idc-f-lbl">Designation:</span> <span class="idc-line">${escHtml(staff.designation || '')}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">Facility Name:</span> <span class="idc-line">${escHtml(staff.facility_name || '')}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">Posting Place:</span> <span class="idc-line">${escHtml(staff.posting_place || '')}</span></div>
             </div>
-            <div class="idc-field" style="align-items: flex-start; margin-top: 4px;">
-              <span class="idc-f-lbl" style="width: 80px;">Permanent:</span> 
-              <span class="idc-line" style="flex:1; white-space: normal; line-height: 1.2;">${escHtml(staff.permanent_address || '')}</span>
+            
+            <!-- Right Column -->
+            <div class="idc-col">
+              <div class="idc-field" style="justify-content: flex-end;"><span class="idc-f-lbl">Staff ID:</span> <span class="idc-line" style="width:120px;">${escHtml(String(staff.id || ''))}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">DOB:</span> <span class="idc-line">${escHtml(dob)}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">Date of Joining:</span> <span class="idc-line">${escHtml(dateOfJoining)}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">Phone:</span> <span class="idc-line">${escHtml(staff.phone || '')}</span></div>
+              
+              <div class="idc-section-title" style="margin-top: 6px; text-align: center;">LOCATION</div>
+              <div class="idc-field"><span class="idc-f-lbl">Block:</span> <span class="idc-line">${escHtml(staff.block || '')}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">District:</span> <span class="idc-line">${escHtml(staff.district || '')}</span></div>
+              <div class="idc-field"><span class="idc-f-lbl">Email:</span> <span class="idc-line">${escHtml(staff.email || '')}</span></div>
             </div>
           </div>
 

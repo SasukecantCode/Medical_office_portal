@@ -17,14 +17,16 @@ def auto_generate(db: Session = Depends(get_db)):
 def read_notifications(status: str = None, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     notifs = get_notifications(db, status=status, skip=skip, limit=limit)
     
-    # We need to enrich the notifications with staff details for the frontend
     results = []
     for n in notifs:
-        staff = db.query(HRStaff).filter(HRStaff.id == n.staff_id).first()
+        # Only attach staff info if the staff is active (not soft-deleted)
+        staff = db.query(HRStaff).filter(HRStaff.id == n.staff_id, HRStaff.deleted_at.is_(None)).first()
+        if not staff:
+            continue
+            
         r = HRNotificationRead.model_validate(n)
-        if staff:
-            r.staff_name = staff.full_name
-            r.staff_display_id = f"NDMO/ESTT/{staff.id:03d}"
+        r.staff_name = staff.full_name
+        r.staff_display_id = f"NDMO/ESTT/{staff.id:03d}"
         results.append(r)
         
     return results

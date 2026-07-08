@@ -348,7 +348,25 @@ def export(
         raw = (r.get("present_posting_place") or "").strip()
         key = raw.title() if raw else "(blank)"
         if key.lower().startswith("dmo office"):
-            key = "Dmo Office"
+            key = "DMO Office"
+            
+        import re
+        abbrevs = [
+            "Dmo", "Drcho", "Dpo", "Cmo", "Chc", "Phc", "Hwc", "Dh", 
+            "Anm", "Gnm", "Ndmo", "Estt", "Macp", "Hr", "Id", "Deo", 
+            "Lhv", "Bpm", "Bcm", "Bam", "Dto", "Cpo", "Ldc", "Smi", 
+            "Sml", "Mi", "Si", "Dhv", "Ha", "Cea", "Idsp", "Nvbdcp", 
+            "Ncd", "Nhm", "Ntep", "Nlep", "Ost", "Atf", "Rbsk", "Fi-Art", 
+            "Cmaay", "Dvbd", "Ictc", "Pmjas", "Npcdcs", "Epi", "Mmrkk", 
+            "Ecg", "Bcg", "Ent", "Mo", "Smo", "Gdmo", "No", "Sno", "Bdm", 
+            "Dcm", "Ddm", "Dam", "Dpm", "Dm", "Dpc", "Pmw", "Po", "Sts", 
+            "Mt", "Lt", "Mts", "Msi", "Sfw", "Rfw", "Hwo", "Ob&G",
+            "Ahc", "Bcc", "Bds", "Mpw", "Hcw", "Tb", "Sg", "Ds", "Arc", "Ri",
+            "Ca", "Da", "Fa", "Na", "Rm", "Oa", "Sc", "Ms", "Sa", "Sb", "Nc", "Vc"
+        ]
+        for abbr in abbrevs:
+            key = re.sub(rf'\b{abbr}\b', abbr.upper(), key)
+            
         by_facility.setdefault(key, []).append(r)
 
     # All Staff sheet first
@@ -529,6 +547,35 @@ def download_profile_photo(staff_id: int, db: Session = Depends(get_db)):
         media_type="image/jpeg",
         filename=staff.profile_photo_original_filename or "photo.jpg",
     )
+
+
+@router.delete("/{staff_id}/photo", response_model=HRStaffRead)
+def delete_profile_photo(staff_id: int, request: Request, db: Session = Depends(get_db)):
+    staff = get_staff(db, staff_id)
+    if staff is None:
+        raise HTTPException(status_code=404, detail="Staff record not found")
+
+    old = getattr(staff, "profile_photo_stored_filename", None)
+    if old:
+        uploads_root = Path(settings.uploads_dir)
+        old_path = uploads_root / old
+        try:
+            if old_path.exists():
+                old_path.unlink()
+        except Exception:
+            pass
+
+    staff.profile_photo_original_filename = None
+    staff.profile_photo_stored_filename = None
+    staff.profile_photo_content_type = None
+    staff.profile_photo_uploaded_at = None
+
+    db.add(staff)
+    db.commit()
+    db.refresh(staff)
+
+    return _staff_read_with_photo_url(staff, request)
+
 
 
 @router.get("/{staff_id}", response_model=HRStaffRead)

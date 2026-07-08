@@ -998,6 +998,7 @@ body.dashboard-active #dashboard-view.dashboard {
   color: white;
 }
 
+/* ── Glass shell: stays fixed, never scrolls ── */
 .data-table-wrapper {
   background: rgba(255, 255, 255, 0.025);
   backdrop-filter: blur(24px) saturate(180%);
@@ -1020,14 +1021,39 @@ body.dashboard-active #dashboard-view.dashboard {
   );
   border-radius: inherit;
   pointer-events: none;
+  z-index: 1;
+}
+
+/* ── Scroll container: overflow lives here, inside the glass ── */
+.data-table-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+
+/* Subtle scroll-shadow hints at left/right edges */
+.data-table-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+.data-table-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+}
+.data-table-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+.data-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .data-table {
   width: 100%;
+  min-width: max-content;      /* let columns size naturally */
 }
 
 .data-table th {
-  padding: 12px 16px;
+  padding: 12px 14px;
   text-align: left;
   font-size: var(--text-xs);
   font-weight: 600;
@@ -1037,14 +1063,20 @@ body.dashboard-active #dashboard-view.dashboard {
   background: rgba(255, 255, 255, 0.03);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 .data-table td {
-  padding: 12px 16px;
+  padding: 10px 14px;
   font-size: var(--text-sm);
   color: rgba(255, 255, 255, 0.8);
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .data-table tr:last-child td {
@@ -1908,7 +1940,7 @@ a.attachment-preview-download:hover {
     grid-template-columns: 1fr;
   }
 
-  .data-table-wrapper {
+  .data-table-scroll {
     overflow-x: auto;
   }
 }

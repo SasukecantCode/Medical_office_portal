@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import uuid
 from datetime import date, datetime
 from typing import Optional
@@ -14,9 +15,27 @@ from app.models.hr_staff_attachment import HRStaffAttachment
 from app.schemas.hr_staff import HRStaffCreate, HRStaffUpdate
 
 
-def _normalize_text_field(value: str) -> str:
-    """Title-case and strip whitespace for consistent storage."""
-    return " ".join(value.strip().split()).title()
+def _normalize_text_field(value: str, field_name: str = "") -> str:
+    """Title-case and strip whitespace for consistent storage, preserving abbreviations."""
+    val = " ".join(value.strip().split()).title()
+    abbrevs = [
+        "Dmo", "Drcho", "Dpo", "Cmo", "Chc", "Phc", "Hwc", "Dh", 
+        "Anm", "Gnm", "Ndmo", "Estt", "Macp", "Hr", "Id", "Deo", 
+        "Lhv", "Bpm", "Bcm", "Bam", "Dto", "Cpo", "Ldc", "Smi", 
+        "Sml", "Mi", "Si", "Dhv", "Ha", "Cea", "Idsp", "Nvbdcp", 
+        "Ncd", "Nhm", "Ntep", "Nlep", "Ost", "Atf", "Rbsk", "Fi-Art", 
+        "Cmaay", "Dvbd", "Ictc", "Pmjas", "Npcdcs", "Epi", "Mmrkk", 
+        "Ecg", "Bcg", "Ent", "Mo", "Smo", "Gdmo", "No", "Sno", "Bdm", 
+        "Dcm", "Ddm", "Dam", "Dpm", "Dm", "Dpc", "Pmw", "Po", "Sts", 
+        "Mt", "Lt", "Mts", "Msi", "Sfw", "Rfw", "Hwo", "Ob&G", 
+        "Ahc", "Bcc", "Bds", "Mpw", "Hcw", "Tb", "Sg", "Ds", "Arc", "Ri"
+    ]
+    if field_name in ("designation", "present_posting_place", "head", "facility_name"):
+        abbrevs.extend(["Ca", "Da", "Fa", "Na", "Rm", "Oa", "Sc", "Ms", "Sa", "Sb", "Nc", "Vc"])
+
+    for abbr in abbrevs:
+        val = re.sub(rf'\b{abbr}\b', abbr.upper(), val)
+    return val
 
 # Fields that should be auto-normalized to Title Case on create/update
 _TITLE_CASE_FIELDS = [
@@ -31,7 +50,7 @@ _TITLE_CASE_FIELDS = [
 def _apply_case_normalization(data: dict) -> dict:
     for field in _TITLE_CASE_FIELDS:
         if field in data and data[field] and isinstance(data[field], str):
-            data[field] = _normalize_text_field(data[field])
+            data[field] = _normalize_text_field(data[field], field)
     return data
 
 
@@ -363,6 +382,21 @@ def dashboard_summary(db: Session) -> dict:
                 label = "(blank)"
             else:
                 label = raw.title()
+                abbrevs = [
+                    "Dmo", "Drcho", "Dpo", "Cmo", "Chc", "Phc", "Hwc", "Dh", 
+                    "Anm", "Gnm", "Ndmo", "Estt", "Macp", "Hr", "Id", "Deo", 
+                    "Lhv", "Bpm", "Bcm", "Bam", "Dto", "Cpo", "Ldc", "Smi", 
+                    "Sml", "Mi", "Si", "Dhv", "Ha", "Cea", "Idsp", "Nvbdcp", 
+                    "Ncd", "Nhm", "Ntep", "Nlep", "Ost", "Atf", "Rbsk", "Fi-Art", 
+                    "Cmaay", "Dvbd", "Ictc", "Pmjas", "Npcdcs", "Epi", "Mmrkk", 
+                    "Ecg", "Bcg", "Ent", "Mo", "Smo", "Gdmo", "No", "Sno", "Bdm", 
+                    "Dcm", "Ddm", "Dam", "Dpm", "Dm", "Dpc", "Pmw", "Po", "Sts", 
+                    "Mt", "Lt", "Mts", "Msi", "Sfw", "Rfw", "Hwo", "Ob&G",
+                    "Ahc", "Bcc", "Bds", "Mpw", "Hcw", "Tb", "Sg", "Ds", "Arc", "Ri",
+                    "Ca", "Da", "Fa", "Na", "Rm", "Oa", "Sc", "Ms", "Sa", "Sb", "Nc", "Vc"
+                ]
+                for abbr in abbrevs:
+                    label = re.sub(rf'\b{abbr}\b', abbr.upper(), label)
             out.append({"key": label, "count": r.count})
         return out
 

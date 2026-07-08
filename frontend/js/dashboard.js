@@ -306,6 +306,10 @@ export async function renderDashboardHome(container) {
     function renderGenericList(containerId, dataList) {
       const el = document.getElementById(containerId);
       if(!el) return;
+      if (dataList.length === 0) {
+        el.innerHTML = '<div style="padding: 32px 16px; text-align: center; color: var(--clr-text-subtle);">Not found</div>';
+        return;
+      }
       el.innerHTML = dataList.map((d, i) => {
         const pct = Math.max(2, (d.count / totalDistrictsCount) * 100);
         const colors = ['#14B8A6', '#6366F1', '#C6973F', '#10B981', '#F43F5E', '#8B5CF6', '#F59E0B', '#3B82F6'];
@@ -521,11 +525,27 @@ export async function renderDashboardHome(container) {
     // Search filter for dash table
     document.getElementById('dash-search')?.addEventListener('input', (e) => {
       const query = e.target.value.toLowerCase();
-      const rows = tbody.querySelectorAll('tr');
+      const rows = tbody.querySelectorAll('tr:not(#dash-empty-row)');
+      let visibleCount = 0;
       rows.forEach(row => {
         const text = row.textContent.toLowerCase();
-        row.style.display = text.includes(query) ? '' : 'none';
+        const isVisible = text.includes(query);
+        row.style.display = isVisible ? '' : 'none';
+        if (isVisible) visibleCount++;
       });
+      
+      let emptyRow = document.getElementById('dash-empty-row');
+      if (visibleCount === 0 && rows.length > 0) {
+        if (!emptyRow) {
+          emptyRow = document.createElement('tr');
+          emptyRow.id = 'dash-empty-row';
+          emptyRow.innerHTML = '<td colspan="3" style="text-align:center; padding: 32px; color:var(--clr-text-subtle);">Not found</td>';
+          tbody.appendChild(emptyRow);
+        }
+        emptyRow.style.display = '';
+      } else if (emptyRow) {
+        emptyRow.style.display = 'none';
+      }
     });
 
     // ── Notification Dropdown Panel ──

@@ -36,42 +36,46 @@ export async function renderStaffList(container) {
       </select>
     </div>
 
-    <div class="data-table-wrapper" style="overflow-x:auto;">
-      <table class="data-table" id="staff-table">
-        <thead>
-          <tr>
-            <th>ID Number</th>
-            <th>Photo</th>
-            <th>Name</th>
-            <th>Father's Name</th>
-            <th>Mother's Name</th>
-            <th>Sex</th>
-            <th>Age</th>
-            <th>Designation</th>
-            <th>Mode of Service</th>
-            <th>Head</th>
-            <th>Present Posting Place</th>
-            <th>Date of Birth</th>
-            <th>Appt. Order No & Dated</th>
-            <th>Date of Joining</th>
-            <th>Total Yrs in Service</th>
-            <th>Date of Retirement</th>
-            <th>1st MACP</th>
-            <th>2nd MACP</th>
-            <th>3rd MACP</th>
-            <th>Basic Pay/Salary</th>
-            <th>Permanent Address</th>
-            <th>Present Address</th>
-            <th>Contact Number</th>
-            <th>Email ID</th>
-            <th>Aadhaar No.</th>
-            <th>PAN No.</th>
-          </tr>
-        </thead>
-        <tbody id="staff-tbody">
-          <tr><td colspan="26" style="text-align:center; padding:40px; color: var(--clr-text-subtle);">Loading...</td></tr>
-        </tbody>
-      </table>
+    <div class="data-table-wrapper">
+      <div class="data-table-scroll">
+        <table class="data-table" id="staff-table">
+          <thead>
+            <tr>
+              <th>ID Number</th>
+              <th>Photo</th>
+              <th>Name</th>
+              <th>Father's Name</th>
+              <th>Mother's Name</th>
+              <th>Sex</th>
+              <th>Age</th>
+              <th>Designation</th>
+              <th>Mode of Service</th>
+              <th>Head</th>
+              <th>Present Posting Place</th>
+              <th>Date of Birth</th>
+              <th>Appt. Order No & Dated</th>
+              <th>Date of Joining</th>
+              <th>Total Yrs in Service</th>
+              <th>Date of Retirement</th>
+              <th>1st MACP</th>
+              <th>2nd MACP</th>
+              <th>3rd MACP</th>
+              <th>Basic Pay/Salary</th>
+              <th>Permanent Address</th>
+              <th>Present Address</th>
+              <th>Contact Number</th>
+              <th>Email ID</th>
+              <th>Aadhaar No.</th>
+              <th>PAN No.</th>
+            </tr>
+          </thead>
+          <tbody id="staff-tbody">
+            <tr><td colspan="26" style="padding: 60px 24px; text-align: left;">
+              <div style="position: sticky; left: 24px; color: var(--clr-text-subtle); font-size: 1.1rem;">Loading...</div>
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   `;
 
@@ -129,7 +133,7 @@ async function loadStaffTable(append = false) {
   if (!append) {
     currentOffset = 0;
     hasMoreStaff = true;
-    tbody.innerHTML = `<tr><td colspan="26" style="text-align:center; padding:40px; color: var(--clr-text-subtle);">Loading...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="26" style="padding: 60px 24px; text-align: left;"><div style="position: sticky; left: 24px; color: var(--clr-text-subtle); font-size: 1.1rem;">Loading...</div></td></tr>`;
   }
 
   if (isLoadingMore || !hasMoreStaff) return;
@@ -144,9 +148,11 @@ async function loadStaffTable(append = false) {
     }
 
     if (staff.length === 0 && !append) {
+      const isSearching = currentFilters.q || currentFilters.designation;
+      const emptyMsg = isSearching ? "Not found" : "No staff records found. Add your first entry!";
       tbody.innerHTML = `
-        <tr><td colspan="26" style="text-align:center; padding: 60px; color: var(--clr-text-subtle);">
-          No staff records found. Add your first entry!
+        <tr><td colspan="26" style="padding: 60px 24px; text-align: left;">
+          <div style="position: sticky; left: 24px; color: var(--clr-text-subtle); font-size: 1.1rem;">${emptyMsg}</div>
         </td></tr>
       `;
       isLoadingMore = false;
@@ -659,11 +665,7 @@ export async function renderStaffForm(container, staffId = null) {
               <textarea class="form-input" name="remarks" rows="2" placeholder="Any additional remarks...">${escHtml(staffData.remarks || '')}</textarea>
             </div>
             ${customFieldsHtml ? `<div class="form-group form-grid-full">${customFieldsHtml}</div>` : ''}
-            <div class="form-group form-grid-full">
-              <label class="form-label">Extra (JSON)</label>
-              <textarea class="form-input" name="extra" rows="3" placeholder='{"key": "value"}'>${staffData.extra ? JSON.stringify(staffData.extra, null, 2) : ''}</textarea>
-              <small style="color: var(--clr-text-subtle); font-size: 11px;">Must be valid JSON. Leave empty if not needed.</small>
-            </div>
+
 
             <hr class="form-section-divider form-grid-full" />
 
@@ -673,9 +675,12 @@ export async function renderStaffForm(container, staffId = null) {
                 <div id="form-photo-preview" class="staff-avatar" style="width:72px; height:72px; border-radius: 14px;"${hasExistingPhoto ? ` data-photo-staff-id="${staffId}" data-photo-version="${staffData.updated_at ? new Date(staffData.updated_at).getTime() : staffId}"` : ''}>
                   <span class="staff-avatar-initial" style="font-size:12px; color: var(--clr-text-subtle);">${hasExistingPhoto ? '' : 'No photo'}</span>
                 </div>
-                <div style="flex:1; min-width: 240px;">
+                <div style="flex:1; min-width: 240px; display:flex; flex-direction:column; gap:8px;">
                   <input class="form-input" id="profile-photo" type="file" accept="image/jpeg" ${photoRequired ? 'required' : ''} />
-                  <small style="color: var(--clr-text-subtle); font-size: 11px;">JPEG only. ${isEdit ? 'Choose a file to replace the current photo.' : 'Optional.'}</small>
+                  <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <small style="color: var(--clr-text-subtle); font-size: 11px;">JPEG only. ${isEdit ? 'Choose a file to replace the current photo.' : 'Optional.'}</small>
+                    ${hasExistingPhoto ? `<button type="button" class="btn btn-ghost" id="delete-photo-btn" style="color: #ef4444; padding: 4px 8px; font-size: 11px; height: auto;">Delete Photo</button>` : ''}
+                  </div>
                 </div>
               </div>
             </div>
@@ -709,7 +714,35 @@ export async function renderStaffForm(container, staffId = null) {
 
   const formPreview = document.getElementById('form-photo-preview');
   if (formPreview?.dataset.photoStaffId) {
-    await hydrateStaffPhotos(formPreview);
+    await hydrateStaffPhotos(formPreview.parentElement);
+  }
+
+  const deletePhotoBtn = document.getElementById('delete-photo-btn');
+  if (deletePhotoBtn) {
+    deletePhotoBtn.addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to delete the profile photo?')) return;
+      deletePhotoBtn.disabled = true;
+      try {
+        await api.deleteProfilePhoto(staffId);
+        clearStaffPhotoCache();
+        showToast('Profile photo deleted.', 'success');
+        
+        // Remove the visual preview
+        if (formPreview) {
+          const img = formPreview.querySelector('img');
+          if (img) img.remove();
+          formPreview.classList.remove('has-photo');
+          const initial = formPreview.querySelector('.staff-avatar-initial');
+          if (initial) initial.textContent = 'No photo';
+          delete formPreview.dataset.photoStaffId;
+          delete formPreview.dataset.photoVersion;
+        }
+        deletePhotoBtn.remove();
+      } catch (err) {
+        showToast(`Failed to delete photo: ${err.message}`, 'error');
+        deletePhotoBtn.disabled = false;
+      }
+    });
   }
 
   // Live auto-calculation
@@ -786,24 +819,14 @@ export async function renderStaffForm(container, staffId = null) {
       payload[k] = val;
     }
 
-    // Parse extra JSON
-    if (payload.extra) {
-      try {
-        payload.extra = JSON.parse(payload.extra);
-      } catch {
-        showToast('Extra field must be valid JSON.', 'error');
-        return;
-      }
-    }
-
     if (payload.phone) {
       payload.phone = normalizePhoneValue(payload.phone);
     }
 
     // Merge custom field values into `extra`
     const customValues = extractCustomFieldValues(fieldDefs, formData);
-    if (Object.keys(customValues).length > 0) {
-      const baseExtra = payload.extra && typeof payload.extra === 'object' && !Array.isArray(payload.extra) ? payload.extra : {};
+    const baseExtra = staffData?.extra && typeof staffData.extra === 'object' && !Array.isArray(staffData.extra) ? staffData.extra : {};
+    if (Object.keys(customValues).length > 0 || Object.keys(baseExtra).length > 0) {
       payload.extra = { ...baseExtra, ...customValues };
     }
 

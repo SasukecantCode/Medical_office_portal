@@ -15,10 +15,8 @@ from app.crud import hr_field_defs as crud_defs
 from app.crud import hr_staff as crud_staff
 from app.schemas.hr_field_def import HRFieldDefCreate, HRFieldDefRead, HRFieldDefUpdate
 from app.schemas.hr_staff import HRStaffCreate, HRStaffUpdate
-from app.utils.normalization import normalize_staff_name
 
 router = APIRouter(prefix="/agent")
-
 
 
 @router.get("/fields", response_model=list[HRFieldDefRead])
@@ -91,61 +89,40 @@ def parse_file(request: Request, file: UploadFile = File(...), db: Session = Dep
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"Failed to parse file: {exc}")
 
+    # simple suggestions: map header -> existing field name if direct match
     existing = [f.name for f in crud_defs.list_field_defs(db)]
     core = [
-        "id", "full_name", "fathers_name", "mothers_name", "gender", "date_of_birth",
-        "designation", "mode_of_service", "head", "present_posting_place",
-        "appointment_order_no", "date_of_joining", "present_basic_pay",
-        "first_macp", "second_macp", "third_macp", "date_of_retirement",
-        "present_address", "permanent_address", "phone", "email",
-        "aadhaar_number", "pan_number", "remarks"
+        "id",
+        "full_name",
+        "gender",
+        "date_of_birth",
+        "designation",
+        "cadre",
+        "employment_type",
+        "phone",
+        "email",
+        "facility_name",
+        "facility_type",
+        "district",
+        "block",
+        "posting_place",
+        "date_of_joining",
+        "remarks",
     ]
     known = set(existing + core)
 
     suggestions: dict[str, Any] = {}
-    
-    # Try semantic mapping with Gemini
-    key = getattr(settings, "gemini_api_key", None) or os.environ.get("GEMINI_API_KEY") or os.environ.get("LLM_API_KEY")
-    headers_list = parsed.get("headers", [])
-    if key and headers_list:
-        import httpx
-        model = getattr(settings, "gemini_model", None) or os.environ.get("GEMINI_MODEL") or "gemini-2.5-pro"
-        model = model.removeprefix("models/")
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
-        
-        prompt_text = (
-            "Map the following CSV headers to standard database fields. "
-            f"Available target fields: {', '.join(known)}. "
-            f"CSV Headers: {', '.join(headers_list)}. "
-            "Return a JSON object where keys are the exact CSV headers and values are the matched target field names (or null if no logical match). "
-            "Example format: {\"Name of Employee\": \"full_name\", \"Regular/Contractual\": \"mode_of_service\", \"Present Posting Place\": \"present_posting_place\"}. "
-            "Return ONLY valid JSON."
-        )
-        try:
-            r = httpx.post(url, headers={"Content-Type": "application/json"}, json={
-                "contents": [{"role": "user", "parts": [{"text": prompt_text}]}],
-                "generationConfig": {"responseMimeType": "application/json"}
-            }, timeout=15.0)
-            if r.status_code == 200:
-                resp_json = r.json()
-                text = resp_json["candidates"][0]["content"]["parts"][0]["text"]
-                suggestions = json.loads(text)
-        except Exception as e:
-            print(f"Gemini mapping failed: {e}")
-
-    # Fallback to simple mapping for any missing headers
-    for h in headers_list:
+    for h in parsed.get("headers", []):
         if not h:
             continue
-        key_h = h.strip()
-        if key_h not in suggestions:
-            low = key_h.lower().replace(" ", "_")
-            if low in known:
-                suggestions[key_h] = low
-            else:
-                suggestions[key_h] = None
+        key = h.strip()
+        low = key.lower().replace(" ", "_")
+        if low in known:
+            suggestions[key] = low
+        else:
+            suggestions[key] = None
 
-    return {"filename": filename, "headers": headers_list, "samples": parsed.get("samples", []), "suggestions": suggestions}
+    return {"filename": filename, "headers": parsed.get("headers", []), "samples": parsed.get("samples", []), "suggestions": suggestions}
 
 
 @router.post("/import")
@@ -203,21 +180,15 @@ def apply_import(
         # Attach extra
         payload["extra"] = extra
         try:
-            # Provide defaults for strictly required database fields so incomplete rows can still be imported
-            if not payload.get("full_name") or not str(payload.get("full_name")).strip():
-                payload["full_name"] = "Unknown Entry"
-            else:
-                payload["full_name"] = normalize_staff_name(str(payload["full_name"]))
-                
-            if not payload.get("designation") or not str(payload.get("designation")).strip():
-                payload["designation"] = "Pending"
-                
+            # Validate minimal required fields
+            if not payload.get("full_name") or not payload.get("designation") or not payload.get("facility_name"):
+                skipped += 1
+                continue
             obj = HRStaffCreate.model_validate(payload)
             staff = crud_staff.create_staff(db, obj)
             created += 1
             out_items.append({"id": staff.id, "full_name": staff.full_name})
-        except Exception as e:
-            print(f"Skipping row due to error: {e}")
+        except Exception:
             skipped += 1
 
     return {"created": created, "skipped": skipped, "items": out_items}

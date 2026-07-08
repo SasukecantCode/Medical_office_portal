@@ -326,6 +326,11 @@ export const api = {
     return res.json();
   },
 
+  deleteProfilePhoto: (staffId) =>
+    request(`/hr/staff/${staffId}/photo`, {
+      method: 'DELETE',
+    }),
+
   // Attachments
   listAttachments: (staffId) =>
     request(`/hr/staff/${staffId}/attachments`),

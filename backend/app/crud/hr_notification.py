@@ -27,26 +27,29 @@ def generate_notifications(db: Session) -> dict:
     macp_threshold = today + relativedelta(months=2)
     retirement_threshold = today + relativedelta(months=6)
 
-    staff_records = db.query(HRStaff).all()
+    # Only consider active (non-deleted) staff
+    staff_records = db.query(HRStaff).filter(HRStaff.deleted_at.is_(None)).all()
+    active_staff_ids = {s.id for s in staff_records}
     
     created_count = 0
     expired_count = 0
     
     # Track existing notifications so we don't duplicate
     existing_notifs = db.query(HRNotification).filter(HRNotification.status == "UNREAD").all()
-    # Expire old ones
+    # Expire old ones or ones belonging to deleted staff
     for notif in existing_notifs:
-        if notif.target_date < today:
+        if notif.target_date < today or notif.staff_id not in active_staff_ids:
             notif.status = "EXPIRED"
             expired_count += 1
             
     db.commit()
     
-    # Reload existing unread (some might have just been expired)
-    existing_unread = db.query(HRNotification).filter(HRNotification.status == "UNREAD").all()
+    # Load all existing notifications to avoid recreating them
+    # even if they are ACKNOWLEDGED or EXPIRED
+    all_existing = db.query(HRNotification).all()
     
     existing_set = set()
-    for n in existing_unread:
+    for n in all_existing:
         existing_set.add((n.staff_id, n.type, n.target_date))
         
     new_notifs = []
