@@ -176,7 +176,27 @@ fn end_edit_session(draft_id: String) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            use tauri_plugin_shell::ShellExt;
+            
+            // Spawn the python backend sidecar
+            let sidecar_command = app.shell().sidecar("medical-backend").unwrap();
+            let (mut rx, mut _child) = sidecar_command
+                .spawn()
+                .expect("Failed to spawn backend sidecar");
+
+            tauri::async_runtime::spawn(async move {
+                // Keep reading the stdout/stderr so it doesn't block, 
+                // and log it for debugging
+                while let Some(event) = rx.recv().await {
+                    println!("Sidecar: {:?}", event);
+                }
+            });
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![edit_document, end_edit_session])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

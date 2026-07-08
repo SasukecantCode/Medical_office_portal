@@ -22,21 +22,40 @@ jobs:
         with:
           node-version: 20
           
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
+          
+      - name: Build Python Backend Sidecar
+        working-directory: ./backend
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+          pyinstaller --name medical-backend --onefile run_server.py --add-data ".env;." --add-data "..\credentials\gcs-key.json;." --add-data "alembic.ini;." --add-data "alembic;alembic"
+          mkdir ..\desktop-app\src-tauri\binaries
+          copy dist\medical-backend.exe ..\desktop-app\src-tauri\binaries\medical-backend-x86_64-pc-windows-msvc.exe
         
       - name: Install dependencies
         working-directory: ./desktop-app
         run: npm install
 
-      - name: Build Tauri App
+      - name: Build Tauri App & Create Release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: ./desktop-app
+          tagName: v-2
+          releaseName: "Medical Office Portal v-2 (Standalone Thin Client)"
+          releaseBody: "Includes fully bundled Python backend pointing to Supabase Cloud DB."
+          releaseDraft: false
+          prerelease: false
 
       - name: Upload Windows Installer Artifacts
         uses: actions/upload-artifact@v4
